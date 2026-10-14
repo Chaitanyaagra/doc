@@ -1,8 +1,9 @@
-const CACHE='filesaathi-v6';
+const CACHE='filesaathi-v7';
 const OCR_FILES=['./libs/tesseract/tesseract.min.js','./libs/tesseract/worker.min.js','./libs/tesseract/core/tesseract-core-simd-lstm.wasm.js','./libs/tesseract/core/tesseract-core-lstm.wasm.js','./libs/tesseract/lang/eng.traineddata.gz','./libs/tesseract/lang/hin.traineddata.gz'];
 const SHELL=['./','./index.html','./config.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png',
   './libs/jszip.min.js','./libs/pdf.min.js','./libs/pdf.worker.min.js','./libs/jspdf.umd.min.js'];
-self.addEventListener('install',e=>{ e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL).then(()=>c.addAll(OCR_FILES).catch(()=>{}))).then(()=>self.skipWaiting())); });
+// Cache each file on its own: one missing file (for example a folder that did not upload) must not stop the app installing.
+self.addEventListener('install',e=>{ e.waitUntil(caches.open(CACHE).then(c=>Promise.allSettled([...SHELL,...OCR_FILES].map(u=>c.add(u)))).then(()=>self.skipWaiting())); });
 self.addEventListener('activate',e=>{ e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith('filesaathi-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
 
 function openDB(){

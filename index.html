@@ -832,8 +832,22 @@ window.FS_PLATFORM = {
     }catch{}
     return out;
   },
-  onInstallable(cb){ installCb=cb; if(installEvt) cb(); },
-  async install(){ if(!installEvt) return false; installEvt.prompt(); const r=await installEvt.userChoice; installEvt=null; return r.outcome==='accepted'; },
+  onInstallable(cb){ installCb=cb; if(installEvt) cb(); else if(!standalone() && location.protocol.startsWith('http')) cb(); },
+  async install(){
+    if(installEvt){ installEvt.prompt(); const r=await installEvt.userChoice; installEvt=null; return r.outcome==='accepted'; }
+    window.FS_CORE?.showInstallHelp?.(); return false;
+  },
+  installSteps(){
+    const ua=navigator.userAgent, ios=/iPad|iPhone|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1), android=/Android/.test(ua);
+    const samsung=/SamsungBrowser/.test(ua), crios=/CriOS|FxiOS|EdgiOS/.test(ua), inApp=/(FBAN|FBAV|Instagram|WhatsApp|Line\/|; wv\))/.test(ua);
+    if(location.protocol==='file:') return {title:'Open it from its web address first',steps:['Opened as a file from the ZIP, FileSaathi cannot be installed.','On this phone or tablet, open your GitHub Pages link instead, for example https://USERNAME.github.io/filesaathi/.','Then come back to this button.']};
+    if(inApp) return {title:'Open it in your browser first',steps:['This page is open inside another app (for example WhatsApp), which cannot install apps.','Tap the menu (⋮ or ⋯) and choose "Open in browser" (Chrome or Safari).','Then tap Install app again.']};
+    if(ios&&crios) return {title:'Use Safari on iPhone and iPad',steps:['Apple lets only Safari add apps to the Home Screen.','Copy this page\'s address and open it in Safari.','Tap the Share button (square with an arrow), then "Add to Home Screen", then Add.']};
+    if(ios) return {title:'Install on iPhone or iPad',steps:['Tap the Share button (square with an up arrow) in Safari\'s toolbar. On iPad it is at the top right.','Scroll down and tap "Add to Home Screen".','Tap Add. FileSaathi appears on your Home Screen like any other app.']};
+    if(samsung) return {title:'Install with Samsung Internet',steps:['Tap the menu (☰) at the bottom right.','Tap "Add page to", then "Home screen" (or tap the install icon in the address bar).','Tap Add.']};
+    if(android) return {title:'Install on Android',steps:['In Chrome, tap the menu (⋮) at the top right.','Tap "Install app" (on some phones it says "Add to Home screen").','Tap Install. If you do not see it, reload the page once and wait a few seconds, then try again.']};
+    return {title:'Install on this computer',steps:['In Chrome or Edge, click the install icon at the right end of the address bar.','Or open the browser menu and choose "Install FileSaathi" (Edge: Apps → Install this site as an app).','Click Install.']};
+  },
   installHelp(){
     const off={ready:'<p>Offline: <b style="color:var(--ok)">ready</b>. FileSaathi opens and works without internet; changes sync when you are back online.</p>',
       installing:'<p>Offline: getting ready…</p>',pending:'<p>Offline: getting ready…</p>',
@@ -2187,7 +2201,7 @@ document.addEventListener('click',async e=>{
     case 'aiClear': S.ai=null; renderGrid(); break;
     case 'manageBtn': S.confirmM=S.confirmF=null; showPanel('manage'); renderManage(); break;
     case 'settingsBtn': showPanel('settings'); renderSettings(); break;
-    case 'installBtn': if(P.install) P.install().then(ok=>{ if(ok) $('#installBtn').hidden=true; }); break;
+    case 'installBtn': if(P.install) P.install().then(ok=>{ if(ok){ $('#installBtn').hidden=true; toast('FileSaathi is being installed'); } }); break;
     case 'backupBtn': backup(); break;
     case 'restoreBtn': $('#restoreFile').click(); break;
     case 'pClose': requestClose(); break;
@@ -2229,7 +2243,10 @@ window.FS_CORE={setSample(s,imgOK){ S.sample=s; S.imgOK=!!imgOK; render(); }, to
     const m=ms.find(x=>x.id===(f.master||'general'))||ms[0], c=fs.find(x=>x.id===f.folder)||{name:'Others'};
     return [cleanDir(m.name),cleanDir(c.name),f.date?f.date.slice(0,4):'Undated'];
   },
-  refreshSettings(){ if(S.panel==='settings') renderSettings(); }, refreshUsage};
+  refreshSettings(){ if(S.panel==='settings') renderSettings(); }, refreshUsage,
+  showInstallHelp(){ const st=P.installSteps?P.installSteps():null; if(!st) return; showPanel('install');
+    $('#drawer').innerHTML=head(st.title)+`<div class="dbody">${st.steps.map((t,i)=>`<div class="step"><span class="k">${i+1}</span><div class="c"><p style="color:var(--ink);font-size:.95rem">${esc(t)}</p></div></div>`).join('')}
+      <p style="margin:0;color:var(--muted);font-size:.86rem">After installing, open FileSaathi from your Home Screen. Your files stay the same.</p></div>`; }};
 document.addEventListener('input',e=>{
   if(e.target.id==='shMsg' && S.share){ S.share.msg=e.target.value; const L=shareLinks(S.share.msg,S.share.label);
     $('#lnkWa').href=L.wa; $('#lnkGm').href=L.gm; $('#lnkOl').href=L.ol; }
