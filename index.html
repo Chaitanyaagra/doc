@@ -1,0 +1,2301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>FileSaathi</title>
+<meta name="description" content="Your private document vault: smart renaming, master folders, typo-tolerant search, sharing and ZIP downloads.">
+<meta name="theme-color" content="#141238">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FileSaathi">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap">
+<script src="libs/jszip.min.js"></script>
+<script src="libs/pdf.min.js"></script>
+<script src="libs/jspdf.umd.min.js"></script>
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+img{max-width:100%}[hidden]{display:none!important}
+</style>
+<style>
+/* FileSaathi — "family locker" design system.
+   Layout: a calm white top bar (brand, search, actions), a quiet summary line, a white sidebar of folders,
+   and a grid of paper-like document cards. Navy carries the interface; gold appears only on the brand mark,
+   the Scan action and things that need attention. Hairlines, not shadows, separate surfaces. */
+:root{
+  --bg:#F4F5F7; --surface:#FFFFFF; --sunk:#EEF0F3; --ink:#14213D; --ink-2:#2B3754; --muted:#5D677A; --line:#E2E5EA; --line-2:#D3D8E0;
+  --indigo:#14213D; --indigo-soft:#E9EDF5; --on-indigo:#FFFFFF;
+  --gold:#B8912F; --gold-soft:#F6EED9; --gold-ink:#6B5214;
+  --band:#FFFFFF; --band-2:#FFFFFF; --band-ink:#14213D; --band-muted:#5D677A; --band-line:#E2E5EA; --band-field:#F4F5F7;
+  --danger:#B42318; --danger-soft:#FDECEA; --ok:#1E7B4F; --ok-soft:#E5F4EC; --warn:#9A6700;
+  --paper:#FBFBF9;
+  --shadow:0 1px 2px rgba(20,33,61,.06);
+  --shadow-lg:0 12px 32px -12px rgba(20,33,61,.22),0 2px 6px rgba(20,33,61,.06);
+  --r:12px; --r-sm:8px;
+  --f-display:"Instrument Sans","Noto Sans Devanagari",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-body:"Instrument Sans","Noto Sans Devanagari",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0D1220; --surface:#141B2D; --sunk:#10172A; --ink:#E7EBF3; --ink-2:#C9D0DD; --muted:#98A2B3; --line:#232C42; --line-2:#2E3852;
+  --indigo:#C9D3EA; --indigo-soft:#1C2540; --on-indigo:#0D1220;
+  --gold:#D4AF4E; --gold-soft:#2A2414; --gold-ink:#E8CF8C;
+  --band:#141B2D; --band-2:#141B2D; --band-ink:#E7EBF3; --band-muted:#98A2B3; --band-line:#232C42; --band-field:#0D1220;
+  --danger:#F28B82; --danger-soft:#3A1C1A; --ok:#6CCB97; --ok-soft:#14301F; --warn:#E9B949; --paper:#192136;
+  --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 14px 34px -12px rgba(0,0,0,.7); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D1220; --surface:#141B2D; --sunk:#10172A; --ink:#E7EBF3; --ink-2:#C9D0DD; --muted:#98A2B3; --line:#232C42; --line-2:#2E3852;
+  --indigo:#C9D3EA; --indigo-soft:#1C2540; --on-indigo:#0D1220;
+  --gold:#D4AF4E; --gold-soft:#2A2414; --gold-ink:#E8CF8C;
+  --band:#141B2D; --band-2:#141B2D; --band-ink:#E7EBF3; --band-muted:#98A2B3; --band-line:#232C42; --band-field:#0D1220;
+  --danger:#F28B82; --danger-soft:#3A1C1A; --ok:#6CCB97; --ok-soft:#14301F; --warn:#E9B949; --paper:#192136;
+  --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 14px 34px -12px rgba(0,0,0,.7); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;margin:0;padding-block:0 56px;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1320px;margin:0 auto}
+
+/* ---------- top bar ---------- */
+.band{background:var(--band);color:var(--band-ink);border-bottom:1px solid var(--line);padding-block:14px 18px}
+.brandrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px;margin-right:auto}
+.logo{width:36px;height:36px;border-radius:10px;background:#14213D;display:grid;place-items:center;flex:none;box-shadow:inset 0 0 0 1px rgba(212,175,78,.35)}
+.logo svg path{fill:#D4AF4E}.logo svg circle{fill:#14213D}
+.brand h1{font-family:var(--f-display);font-weight:650;font-size:1.22rem;line-height:1;margin:0;letter-spacing:-.015em;color:var(--ink)}
+.brand h1 b{font-weight:650;color:var(--gold)}
+.brand small{display:block;color:var(--muted);font-size:.76rem;margin-top:3px}
+.bbtn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);padding:8px 13px;border-radius:var(--r-sm);font-weight:550;font-size:.9rem;white-space:nowrap}
+.bbtn:hover{border-color:var(--ink-2)}
+.bbtn.gold{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.bbtn.gold:hover{background:var(--ink-2)}
+.bbtn:disabled{opacity:.45;cursor:not-allowed}
+#syncChip[data-state="ok"]{color:var(--ok)} #syncChip[data-state="error"],#syncChip[data-state="auth"]{color:var(--danger)}
+.hello{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-top:22px}
+.hello h2{font-family:var(--f-display);font-size:clamp(1.45rem,2.6vw,1.9rem);font-weight:600;letter-spacing:-.022em;line-height:1.15;margin:0;flex:1 1 320px;text-wrap:balance}
+.hello h2 span{display:block;color:var(--muted);font-size:.93rem;font-weight:400;letter-spacing:0;margin-top:5px}
+.stats{display:flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
+.stat{min-width:120px;padding:10px 18px;border-left:1px solid var(--line)}
+.stat:first-child{border-left:0}
+.stat b{display:block;font-family:var(--f-display);font-size:1.45rem;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.stat span{font-size:.78rem;color:var(--muted)}
+.stat.alert b{color:var(--gold)}
+.searchrow{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+.search{flex:1 1 320px;position:relative;min-width:0}
+.search input{width:100%;padding:12px 16px 12px 44px;border-radius:var(--r);border:1px solid var(--line-2);background:var(--bg);color:var(--ink);font-size:.98rem;transition:border-color .15s,background .15s}
+.search input:focus{background:var(--surface);border-color:var(--ink-2);outline:none;box-shadow:0 0 0 3px var(--indigo-soft)}
+.search svg{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.snote{margin-top:8px;font-size:.84rem;color:var(--muted);min-height:1.3em}
+.snote b{color:var(--ink);font-weight:600}
+.snote button{border:0;background:none;color:var(--ink);text-decoration:underline;padding:0}
+.banner{margin-top:16px;padding:11px 14px;border-radius:var(--r-sm);background:var(--gold-soft);color:var(--gold-ink);font-size:.9rem;border:1px solid color-mix(in srgb,var(--gold) 30%,transparent)}
+
+/* ---------- body ---------- */
+.layout{display:grid;grid-template-columns:248px minmax(0,1fr);gap:28px;margin-top:22px}
+.side{position:sticky;top:calc(env(safe-area-inset-top,0px) + 14px);align-self:start;max-height:calc(100vh - 28px);overflow:auto;display:flex;flex-direction:column;gap:4px;padding:14px 10px 16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.rail{display:flex;flex-direction:column;gap:1px}
+.side h3{font-size:.78rem;color:var(--muted);margin:14px 10px 4px;font-weight:600;display:flex;align-items:center;justify-content:space-between}
+.side h3:first-child{margin-top:2px}
+.side h3 button{border:0;background:none;color:var(--ink);font-size:.78rem;font-weight:600;padding:0;text-decoration:underline;text-underline-offset:2px}
+.fold{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--r-sm);border:0;background:transparent;text-align:left;width:100%;color:var(--ink-2);font-size:.92rem}
+.fold:hover{background:var(--sunk)}
+.fold.on{background:var(--indigo-soft);color:var(--ink);font-weight:600}
+.fold .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.fold .ic{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;flex:none;font-weight:650;font-size:.74rem;color:#fff}
+.fold .n{margin-left:auto;font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.fold.empty{opacity:.55}
+.mrail .fold.on{box-shadow:inset 2px 0 0 var(--gold)}
+.newfold{display:flex;gap:6px;margin:6px 4px 0}
+.newfold input{flex:1;min-width:0;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg);font-size:.86rem}
+.meter{margin:14px 10px 0;font-size:.76rem;color:var(--muted)}
+.meter .bar{height:4px;border-radius:9px;background:var(--sunk);margin-top:6px;overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--ink);width:0}
+
+.main{min-width:0;display:flex;flex-direction:column;gap:24px}
+.btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-2);background:var(--surface);padding:8px 13px;border-radius:var(--r-sm);font-weight:550;font-size:.9rem;white-space:nowrap;color:var(--ink)}
+.btn:hover{border-color:var(--ink-2)}
+.btn.primary{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.btn.primary:hover{background:var(--ink-2)}
+.btn.gold{background:var(--gold);color:#1B1405;border-color:var(--gold);font-weight:650}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,transparent)}
+.btn.wa{background:#1F7A4C;color:#fff;border-color:#1F7A4C}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:5px 10px;font-size:.84rem}
+a.btn{text-decoration:none}
+a.btn.wa{color:#fff}
+
+/* ---------- upload tray ---------- */
+.tray{border:1px dashed var(--line-2);border-radius:var(--r);background:var(--surface);padding:18px 20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;transition:border-color .15s,background .15s}
+.tray.drag{border-color:var(--gold);border-style:solid;background:var(--gold-soft)}
+.tray .ico{width:46px;height:46px;border-radius:12px;background:var(--indigo-soft);display:grid;place-items:center;color:var(--ink);flex:none}
+.tray .ico svg{width:22px;height:22px}
+.tray .txt{flex:1 1 260px;min-width:0}
+.tray .txt strong{font-family:var(--f-display);font-size:1.02rem;font-weight:600;display:block;line-height:1.3}
+.tray .txt span{color:var(--muted);font-size:.87rem}
+.tray .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.tray .acts label{font-size:.76rem;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.tray .acts select,.tray .acts input{padding:7px 10px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--surface);min-width:0;max-width:220px}
+#scanBtn{border-color:var(--gold);color:var(--gold-ink);background:var(--gold-soft)}
+.tip{width:100%;font-size:.83rem;color:var(--muted);border-top:1px solid var(--line);padding-top:11px;display:flex;gap:8px;align-items:flex-start}
+.tip svg{flex:none;margin-top:2px;color:#1F7A4C}
+.queue{display:flex;flex-direction:column;gap:4px;width:100%}
+.qi{display:flex;align-items:center;gap:10px;font-size:.86rem;padding:7px 10px;border-radius:var(--r-sm);background:var(--bg);border:1px solid var(--line)}
+.qi .nm{font-family:var(--f-mono);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.qi .st{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+.qi.err .st{color:var(--danger)} .qi.done .st{color:var(--ok)}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--line-2);border-top-color:var(--ink);animation:sp .8s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ---------- sections ---------- */
+.sechead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;min-width:0}
+.sechead h2{font-family:var(--f-display);font-size:1.15rem;font-weight:600;margin:0;line-height:1.25;letter-spacing:-.012em;text-wrap:balance}
+.sechead .crumb{color:var(--muted);font-weight:400}
+.sechead .sub{color:var(--muted);font-size:.86rem}
+.remind{display:flex;flex-direction:column;gap:10px}
+.rlist{display:flex;gap:10px;overflow-x:auto;padding:1px 1px 6px}
+.rcard{flex:0 0 240px;border-radius:var(--r);padding:12px 14px;background:var(--surface);border:1px solid var(--line);text-align:left;display:flex;flex-direction:column;gap:3px}
+.rcard:hover{border-color:var(--line-2);box-shadow:var(--shadow)}
+.rcard .when{font-weight:650;font-size:.92rem;display:flex;align-items:center;gap:7px}
+.rcard .when::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.rcard.late .when{color:var(--danger)} .rcard.soon .when{color:var(--warn)}
+.rcard .what{font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.rcard .kind{font-size:.76rem;color:var(--muted)}
+
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bar .grow{margin-right:auto}
+.bar select{padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--surface);font-size:.88rem}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line-2);background:var(--surface);border-radius:999px;padding:4px 12px;font-size:.82rem;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.chip.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 12px;border-radius:var(--r);background:var(--ink);color:var(--surface)}
+.bulk .btn{background:transparent;color:var(--surface);border-color:color-mix(in srgb,var(--surface) 35%,transparent)}
+.bulk select{padding:5px 8px;border-radius:var(--r-sm);border:0;background:var(--surface);color:var(--ink);max-width:180px;font-size:.84rem}
+
+/* ---------- document cards ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s,box-shadow .15s}
+.card:hover{border-color:var(--line-2);box-shadow:var(--shadow-lg)}
+@media (prefers-reduced-motion:reduce){.card,.search input,.tray{transition:none}.spin{animation:none}}
+.card.sel{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.thumb{aspect-ratio:4/3;max-width:100%;background:var(--sunk);display:grid;place-items:center;overflow:hidden;position:relative;border-bottom:1px solid var(--line)}
+.thumb img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.thumb .ext{font-family:var(--f-mono);font-weight:500;font-size:.95rem;color:var(--muted);border:1px solid var(--line-2);padding:22px 16px 10px;border-radius:3px 14px 3px 3px;background:var(--paper)}
+.mtag{position:absolute;left:8px;bottom:8px;z-index:1;font-size:.7rem;color:var(--ink);font-weight:600;display:flex;align-items:center;gap:5px;background:color-mix(in srgb,var(--surface) 92%,transparent);border:1px solid var(--line);padding:2px 8px 2px 6px;border-radius:999px}
+.mtag i{width:7px;height:7px;border-radius:50%;display:block}
+.card .body{padding:11px 13px 13px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.fname{font-family:var(--f-mono);font-size:.76rem;line-height:1.45;word-break:break-all;color:var(--ink)}
+.meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:.78rem;color:var(--muted)}
+.tag{display:inline-flex;align-items:center;gap:5px;padding:1px 8px 1px 6px;border-radius:999px;background:var(--bg);border:1px solid var(--line);color:var(--ink-2);font-size:.74rem}
+.tag i{width:7px;height:7px;border-radius:50%;display:block}
+.pill{padding:1px 8px;border-radius:999px;font-size:.72rem;font-weight:650}
+.pill.late{background:var(--danger-soft);color:var(--danger)}
+.pill.soon{background:var(--gold-soft);color:var(--gold-ink)}
+.pill.fz{background:var(--indigo-soft);color:var(--ink)}
+.pick{position:absolute;top:8px;left:8px;width:24px;height:24px;border-radius:7px;border:1px solid var(--line-2);background:var(--surface);display:grid;place-items:center;z-index:2;color:var(--surface);opacity:0;transition:opacity .15s}
+.card:hover .pick,.card.sel .pick,.pick:focus-visible,.pick.on{opacity:1}
+@media (hover:none){.pick{opacity:1}}
+.pick.on{background:var(--ink);border-color:var(--ink)}
+.star{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;color:var(--muted);z-index:2}
+.star.on{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 40%,transparent)}
+.open{border:0;background:transparent;padding:0;text-align:left;display:flex;flex-direction:column;width:100%}
+
+.empty-state{border-radius:var(--r);background:var(--surface);border:1px solid var(--line);padding:30px 26px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:24px;align-items:center}
+.empty-state h2{font-family:var(--f-display);margin:0 0 6px;font-size:1.25rem;font-weight:600;letter-spacing:-.012em}
+.empty-state p{margin:0 0 10px;color:var(--muted);max-width:64ch}
+.empty-state .eg{font-family:var(--f-mono);font-size:.78rem;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;display:flex;flex-direction:column;gap:4px;overflow-x:auto}
+.empty-state .eg span{color:var(--muted)}
+.empty-state .eg b{color:var(--ink);font-weight:500}
+
+/* ---------- side panel ---------- */
+.scrim{position:fixed;inset:0;background:rgba(13,18,32,.42);z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:41;display:flex;flex-direction:column;border-left:1px solid var(--line);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px);box-shadow:var(--shadow-lg)}
+.dhead{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--line)}
+.dhead h2{font-family:var(--f-display);margin:0;font-size:1.08rem;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.01em}
+.dbody{overflow:auto;padding:20px;display:flex;flex-direction:column;gap:16px;flex:1}
+.preview{border-radius:var(--r);background:var(--sunk);border:1px solid var(--line);overflow:hidden;display:grid;place-items:center;min-height:180px}
+.preview img{max-height:340px;width:auto;max-width:100%;object-fit:contain}
+.summary{background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 14px;font-size:.92rem}
+.summary b{font-size:.78rem;display:block;color:var(--muted);margin-bottom:2px;font-weight:600}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fields label{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted);font-weight:550;min-width:0}
+.fields label.full{grid-column:1/-1}
+.fields input,.fields select,.fields textarea{padding:8px 11px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--surface);font-size:.92rem;color:var(--ink);min-width:0;width:100%}
+.fields input:focus,.fields select:focus,.fields textarea:focus{outline:none;border-color:var(--ink-2);box-shadow:0 0 0 3px var(--indigo-soft)}
+.fields .mono{font-family:var(--f-mono);font-size:.82rem}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:5px 16px;font-size:.85rem;padding-top:4px;border-top:1px solid var(--line)}
+.facts dt{color:var(--muted)} .facts dd{margin:0;min-width:0;word-break:break-word}
+.dfoot{display:flex;gap:8px;flex-wrap:wrap;padding:12px 20px;border-top:1px solid var(--line);background:var(--surface)}
+.dfoot .sp{margin-left:auto}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-radius:var(--r-sm);background:var(--danger-soft);color:var(--danger);font-size:.88rem;width:100%}
+.mlist{display:flex;flex-direction:column;gap:8px}
+.mitem{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r-sm)}
+.mitem input{flex:1 1 160px;min-width:0;padding:7px 10px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--surface)}
+.mitem .n{font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.step{display:flex;gap:14px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:var(--r)}
+.step .k{width:28px;height:28px;border-radius:8px;background:var(--indigo-soft);color:var(--ink);display:grid;place-items:center;font-weight:650;font-size:.78rem;flex:none}
+.step .c{display:flex;flex-direction:column;gap:8px;min-width:0;flex:1}
+.step .c p{margin:0;color:var(--muted);font-size:.88rem}
+.step .row{display:flex;gap:8px;flex-wrap:wrap}
+.msgbox{width:100%;min-height:110px;padding:10px 12px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--surface);font-family:var(--f-body);font-size:.88rem;resize:vertical}
+.flist{font-family:var(--f-mono);font-size:.76rem;color:var(--muted);max-height:120px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.flist span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:10px 18px;border-radius:var(--r-sm);z-index:60;font-size:.9rem;max-width:calc(100% - 32px);box-shadow:var(--shadow-lg)}
+
+@media (max-width:860px){
+  .band{padding-block:10px 14px}
+  .hello{margin-top:14px;gap:12px}
+  .stats{width:100%}.stat{flex:1;min-width:0;padding:8px 12px}
+  .layout{grid-template-columns:minmax(0,1fr);gap:16px;margin-top:16px}
+  .side{position:static;max-height:none;overflow:visible;gap:6px;padding:0;background:transparent;border:0}
+  .rail{flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:4px}
+  .side h3{margin:2px 2px 0}
+  .side h3.hideM,.meter,.newfold{display:none}
+  .fold{width:auto;white-space:nowrap;border:1px solid var(--line);background:var(--surface);flex:none}
+  .mrail .fold.on{box-shadow:none;border-color:var(--ink)}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px}
+  .empty-state{grid-template-columns:minmax(0,1fr)}
+  .fields{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+
+</head>
+<body>
+<style>
+/* From the Canva app design: phone bottom bar with a raised gold Scan button, recent-documents list */
+.recent{display:flex;flex-direction:column;gap:10px}
+.rrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--surface);border:1px solid var(--line);text-align:left;width:100%;box-shadow:var(--shadow)}
+.rrow .rt{width:44px;height:44px;border-radius:10px;background:var(--sunk);overflow:hidden;flex:none;display:grid;place-items:center;font-family:var(--f-mono);font-size:.62rem;color:var(--muted)}
+.rrow .rt img{width:100%;height:100%;object-fit:cover}
+.rrow .rn{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.rrow .rn b{font-family:var(--f-mono);font-weight:500;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rrow .rn span{font-size:.78rem;color:var(--muted)}
+.linkbtn{border:0;background:none;color:var(--ink);font-weight:600;font-size:.88rem;padding:0;margin-left:auto;text-decoration:underline;text-underline-offset:2px}
+#recentList{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
+.rrow{box-shadow:none!important}
+.tip{font-size:.8rem!important;padding-top:9px!important}
+@media (max-width:860px){ #waTip{display:none!important} #recentList{grid-template-columns:minmax(0,1fr)} }
+.bnav{display:none}
+@media (max-width:860px){
+  .bnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -8px 24px -16px rgba(20,18,56,.35);
+    padding:6px max(10px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px));justify-content:space-around;align-items:flex-end}
+  .bnav button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.7rem;color:var(--muted);padding:4px 6px;min-width:56px}
+  .bnav button.on{color:var(--indigo);font-weight:600}
+  .bnav .fab{width:58px;height:58px;border-radius:50%;background:linear-gradient(145deg,#E9C06D,#C99332);color:#241700;display:grid;place-items:center;margin-top:-26px;box-shadow:0 10px 22px -8px rgba(201,147,50,.8);border:4px solid var(--surface)}
+  .bnav .scanb{color:var(--ink);font-weight:600}
+  body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+  #shareAll,#zipAll .zl{display:none}
+}
+</style>
+<header class="band">
+  <div class="wrap gut">
+    <div class="brandrow">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" fill="#241700"/><circle cx="16.5" cy="13" r="2.3" fill="#E9C06D"/></svg>
+        </div>
+        <div><h1>File<b>Saathi</b></h1><small>Private document vault for Indian families</small></div>
+      </div>
+      <button class="bbtn" id="syncChip" hidden></button>
+      <button class="bbtn" id="installBtn" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7m0 0-3-3m3 3 3-3"/></svg>
+        Install app
+      </button>
+      <button class="bbtn" id="settingsBtn" aria-label="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+        Settings
+      </button>
+      <button class="bbtn" id="shareAll" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
+        Share
+      </button>
+      <button class="bbtn gold" id="zipAll" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>
+        <span class="zl">Download all</span>
+      </button>
+    </div>
+    <div class="hello">
+      <h2 id="hello">Welcome<span>Every document, properly named and filed in the right folder.</span></h2>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="searchrow">
+      <label class="search" for="q">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Search: electricity bill 2025, aadhar, dad insurance…" autocomplete="off">
+      </label>
+      <button class="bbtn" id="aiSearch" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.6L19.5 9l-5.7 1.5L12 16l-1.8-5.5L4.5 9l5.7-1.4z"/><path d="M19 14l.9 2.6 2.6.9-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9z"/></svg>
+        Ask AI
+      </button>
+    </div>
+    <div class="snote" id="snote"></div>
+  </div>
+</header>
+
+<div class="wrap gut">
+  <div class="banner" id="banner" hidden></div>
+  <div class="layout">
+    <aside class="side" aria-label="Folders">
+      <h3>Master folders <button id="manageBtn" type="button">Manage</button></h3>
+      <nav class="rail mrail" id="mrail"></nav>
+      <form class="newfold" id="newMaster"><input id="newMasterName" placeholder="New master folder…" maxlength="40" aria-label="New master folder name"><button class="btn sm" type="submit">Add</button></form>
+      <h3 class="hideM">Library</h3>
+      <nav class="rail" id="lrail"></nav>
+      <h3 class="hideM">Folders</h3>
+      <nav class="rail" id="rail"></nav>
+      <form class="newfold" id="newFold"><input id="newFoldName" placeholder="New sub-folder…" maxlength="40" aria-label="New sub-folder name"><button class="btn sm" type="submit">Add</button></form>
+      <div id="meter"></div>
+    </aside>
+
+    <main class="main">
+      <section class="tray" id="tray">
+        <div class="ico" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        </div>
+        <div class="txt">
+          <strong>Drop files here, or paste a screenshot</strong>
+          <span>Photos, PDFs, Word, Excel or text. Each file is read, renamed, dated and filed for you.</span>
+        </div>
+        <div class="acts">
+          <label for="upMaster">Save into master folder
+            <select id="upMaster"></select>
+          </label>
+          <input id="upMasterNew" placeholder="New master folder name" maxlength="40" hidden aria-label="New master folder name">
+          <input type="file" id="pickFiles" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.txt,.csv,.json,.md" hidden>
+          <button class="btn primary" id="pickBtn">Choose files</button>
+          <button class="btn" id="scanBtn" title="Take photos of a document; they are straightened and saved as one PDF">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3.2"/></svg>
+            Scan</button>
+          <button class="btn" id="photosBtn" title="Pick several photos and save them as one PDF">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="13" height="13" rx="2"/><path d="M8 2h11a2 2 0 0 1 2 2v11"/></svg>
+            Photos to PDF</button>
+          <input type="file" id="scanInput" accept="image/*" capture="environment" hidden>
+          <input type="file" id="photosInput" accept="image/*" multiple hidden>
+          <label id="aiTog" hidden style="display:flex;flex-direction:row;align-items:center;gap:6px;font-size:.85rem;color:var(--ink);cursor:pointer"><input type="checkbox" id="useAI" style="width:16px;height:16px;accent-color:var(--indigo)"> Read with AI</label>
+        </div>
+        <div class="tip" id="aiNote" hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--indigo)"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          <span id="aiNoteText">With "Read with AI" on, each new file's image or text is sent to Claude (by Anthropic) to name, date and file it. Untick it for very sensitive documents; they are then read on this device with simple rules instead.</span>
+        </div>
+        <div class="tip" id="waTip">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.5-3.9-4.7-4.1-.1-.2-1.1-1.5-1.1-2.9s.7-2.1 1-2.4c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.7 1.2 1.6 1.9 1.1 1 2 1.3 2.3 1.4.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.6-.1l2 .9c.3.1.4.2.5.3.1.2.1.7-.1 1.3Z"/></svg>
+          <span id="waTipText"></span>
+        </div>
+        <div class="queue" id="queue" hidden></div>
+      </section>
+
+      <section class="remind" id="remind" hidden>
+        <div class="sechead"><h2>Needs attention</h2><span class="sub">Expiry or due dates in the next 45 days</span></div>
+        <div class="rlist" id="rlist"></div>
+      </section>
+
+      <section class="recent" id="recent" hidden>
+        <div class="sechead" style="width:100%"><h2>Recent documents</h2><button class="linkbtn" id="recentAll">View all</button></div>
+        <div class="recent" id="recentList"></div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:14px" id="filesSec">
+        <div class="bar">
+          <div class="sechead grow"><h2 id="viewTitle">All files</h2><span class="sub" id="viewCount"></span></div>
+          <select id="sort" aria-label="Sort">
+            <option value="relevance">Best match</option>
+            <option value="date_desc">Document date: newest first</option>
+            <option value="date_asc">Document date: oldest first</option>
+            <option value="up_desc">Recently added</option>
+            <option value="name">Name A–Z</option>
+          </select>
+          <button class="btn" id="shareView" disabled>Share</button>
+          <button class="btn" id="zipView" disabled>Download ZIP</button>
+        </div>
+        <div class="chips" id="years"></div>
+        <div class="bulk" id="bulk" hidden>
+          <strong id="bulkN"></strong>
+          <button class="btn sm" id="bulkShare">Share</button>
+          <button class="btn sm" id="bulkZip">ZIP</button>
+          <select id="bulkMaster" aria-label="Move to master folder"></select>
+          <select id="bulkMove" aria-label="Move to sub-folder"></select>
+          <button class="btn sm" id="bulkPdf" hidden>Make one PDF</button>
+          <button class="btn sm" id="bulkTrash">Move to bin</button>
+          <button class="btn sm" id="bulkClear">Clear</button>
+        </div>
+        <div class="grid" id="grid"></div>
+        <div id="empty"></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<nav class="bnav" id="bnav" aria-label="Main">
+  <button data-nav="home" class="on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 11 9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+  <button data-nav="files"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z"/></svg>My Files</button>
+  <button data-nav="scan" class="scanb" aria-label="Scan a document"><span class="fab"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3.2"/></svg></span>Scan</button>
+  <button data-nav="alerts"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>Reminders</button>
+  <button data-nav="more"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</button>
+</nav>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="Details"></aside>
+<div class="toast" id="toast" hidden></div>
+<input type="file" id="restoreFile" accept=".zip,application/zip" hidden>
+
+<script src="config.js"></script>
+<script>
+(() => {
+const DBNAME='filesaathi', DBVER=1;
+let dbp=null;
+function openDB(){
+  return dbp || (dbp=new Promise((res,rej)=>{
+    const r=indexedDB.open(DBNAME,DBVER);
+    r.onupgradeneeded=()=>{ const d=r.result; ['docs','blobs','inbox'].forEach(s=>{ if(!d.objectStoreNames.contains(s)) d.createObjectStore(s); }); };
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  }));
+}
+async function tx(store,mode,fn){
+  const d=await openDB();
+  return new Promise((res,rej)=>{ const t=d.transaction(store,mode); const req=fn(t.objectStore(store)); t.oncomplete=()=>res(req?req.result:undefined); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error); });
+}
+const idb={get:(s,k)=>tx(s,'readonly',o=>o.get(k)),put:(s,k,v)=>tx(s,'readwrite',o=>o.put(v,k)),del:(s,k)=>tx(s,'readwrite',o=>o.delete(k)),
+  all:s=>tx(s,'readonly',o=>o.getAll()),keys:s=>tx(s,'readonly',o=>o.getAllKeys()),clear:s=>tx(s,'readwrite',o=>o.clear())};
+
+/* Local store. Every record carries updatedAt so devices can merge; deletions leave a small
+   tombstone so they reach other devices. Sync bookkeeping (drive ids) never bumps updatedAt. */
+const SYNC_KEYS=['driveId','driveThumbId','drivePath','driveTrashed','remoteMissing','syncAt'];
+const listeners=[]; let emitT=null;
+function emit(){ clearTimeout(emitT); emitT=setTimeout(async()=>{ const vals=(await idb.all('docs')).filter(v=>!v.deleted); const snap={docs:vals.map(v=>({id:v.__id,data:()=>v}))}; listeners.forEach(fn=>fn(snap)); },30); }
+const keepSync=c=>{ const o={}; if(c) SYNC_KEYS.forEach(k=>{ if(c[k]!=null) o[k]=c[k]; }); return o; };
+const col={
+  doc:id=>({
+    set:async d=>{ const c=await idb.get('docs',id); await idb.put('docs',id,{...d,...keepSync(c),__id:id,updatedAt:Date.now()}); emit(); Sync.soon(); },
+    update:async p=>{ const c=await idb.get('docs',id); if(!c||c.deleted) throw {code:'not_found'}; await idb.put('docs',id,{...c,...p,__id:id,updatedAt:Date.now()}); emit(); Sync.soon(); },
+    delete:async()=>{ const c=await idb.get('docs',id); await idb.put('docs',id,{__id:id,deleted:true,updatedAt:Date.now(),kind:c?.kind,asset:c?.asset||null,thumb:c?.thumb||null,...keepSync(c)}); emit(); Sync.soon(); }
+  }),
+  onSnapshot(fn,err){ listeners.push(fn); emit(); return ()=>{}; }
+};
+
+/* ---------- Google Drive sync ---------- */
+const CFG=window.FS_CONFIG||{};
+const LS={get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v); }catch{ return d; } },
+  set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }, del(k){ try{ localStorage.removeItem(k); }catch{} }};
+const API='https://www.googleapis.com/drive/v3', UP='https://www.googleapis.com/upload/drive/v3', FOLDER='application/vnd.google-apps.folder';
+const qs=s=>"'"+String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";
+const Sync = {
+  cid:()=>LS.get('fs_g_cid','')||CFG.googleClientId||'',
+  on:()=>!!LS.get('fs_g_on',false),
+  token(){ const t=LS.get('fs_g_tok',null); return t&&t.exp>Date.now()+60000?t.v:null; },
+  state:'idle', last:LS.get('fs_g_last',0), err:null, busy:false, again:false, t:null, gis:null,
+  loadGIS(){ return this.gis||(this.gis=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://accounts.google.com/gsi/client'; s.onload=res; s.onerror=()=>{ this.gis=null; rej({code:'gis_blocked'}); }; document.head.appendChild(s); })); },
+  async connect(){
+    if(!this.cid()) throw {code:'no_client_id'};
+    await this.loadGIS();
+    const tok=await new Promise((res,rej)=>{
+      const c=google.accounts.oauth2.initTokenClient({client_id:this.cid(),scope:'https://www.googleapis.com/auth/drive.file',
+        callback:r=>r.error?rej({code:r.error}):res(r), error_callback:e=>rej({code:e?.type||'popup_closed'})});
+      c.requestAccessToken({prompt:this.on()?'':'consent'});
+    });
+    LS.set('fs_g_tok',{v:tok.access_token,exp:Date.now()+(tok.expires_in-30)*1000}); LS.set('fs_g_on',true);
+    let email=''; try{ const a=await (await this.fetch(API+'/about?fields=user(emailAddress)')).json(); email=a.user?.emailAddress||''; }catch{}
+    LS.set('fs_g_email',email);
+    const prev=LS.get('fs_g_account',null); let switched=false;
+    if(email && prev && prev!==email){ await this.resetForNewAccount(); switched=true; }
+    if(email) LS.set('fs_g_account',email);
+    this.ui(); this.now(); return {switched,email};
+  },
+  async resetForNewAccount(){
+    // Drive ids from the previous Google account mean nothing in the new one: forget them and upload again.
+    ['fs_g_root','fs_g_folders','fs_g_vault','fs_g_last'].forEach(LS.del); this.last=0;
+    for(const d of await idb.all('docs')){
+      if(d.deleted){ await idb.del('docs',d.__id); continue; }
+      const c={...d}; SYNC_KEYS.forEach(k=>delete c[k]); await idb.put('docs',d.__id,c);
+    }
+  },
+  disconnect(){
+    const t=this.token(); try{ if(t&&window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(t,()=>{}); }catch{}
+    ['fs_g_tok','fs_g_on','fs_g_email'].forEach(LS.del); this.state='idle'; this.ui();
+  },
+  async fetch(url,opts={}){
+    const tok=this.token(); if(!tok) throw {code:'auth'};
+    const ctl=new AbortController(), ms=opts.timeout||(opts.body instanceof Blob&&opts.body.size>1048576?300000:60000); const tm=setTimeout(()=>ctl.abort(),ms);
+    let r; try{ r=await fetch(url,{...opts,signal:ctl.signal,headers:{...(opts.headers||{}),Authorization:'Bearer '+tok}}); }
+    catch(e){ throw {code:ctl.signal.aborted?'timeout':'offline'}; } finally{ clearTimeout(tm); }
+    if(r.status===401){ LS.del('fs_g_tok'); throw {code:'auth'}; }
+    if(!r.ok) throw {code:'drive_'+r.status};
+    return r;
+  },
+  async findOne(q){ const j=await (await this.fetch(API+'/files?'+new URLSearchParams({q:q+' and trashed=false',fields:'files(id)',pageSize:'5',spaces:'drive'}))).json(); return j.files?.[0]?.id||null; },
+  async mkdir(name,parent,props){ const r=await this.fetch(API+'/files?fields=id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,mimeType:FOLDER,...(parent?{parents:[parent]}:{}),...(props?{appProperties:props}:{})})}); return (await r.json()).id; },
+  async root(){
+    let id=LS.get('fs_g_root',null);
+    if(id){ try{ const j=await (await this.fetch(API+'/files/'+id+'?fields=trashed')).json(); if(!j.trashed) return id; }catch(e){ if(e.code==='auth'||e.code==='offline') throw e; } }
+    id=await this.findOne(`mimeType='${FOLDER}' and appProperties has { key='fs_root' and value='1' }`) || await this.mkdir('FileSaathi',null,{fs_root:'1'});
+    LS.set('fs_g_root',id); LS.set('fs_g_folders',{}); LS.del('fs_g_vault'); return id;
+  },
+  async path(parts){
+    const root=await this.root(); const cache=LS.get('fs_g_folders',{}); let parent=root, key='';
+    for(const p of parts){ key+='/'+p; let id=cache[key];
+      if(!id){ id=await this.findOne(`name=${qs(p)} and ${qs(parent)} in parents and mimeType='${FOLDER}'`) || await this.mkdir(p,parent); cache[key]=id; LS.set('fs_g_folders',cache); }
+      parent=id; }
+    return parent;
+  },
+  async upload(blob,meta){
+    const b='fs'+Math.random().toString(36).slice(2), type=blob.type||'application/octet-stream';
+    const body=new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: ${type}\r\n\r\n`,blob,`\r\n--${b}--`]);
+    return (await (await this.fetch(UP+'/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+b},body})).json()).id;
+  },
+  async download(id){ return (await this.fetch(API+'/files/'+id+'?alt=media',{timeout:300000})).blob(); },
+  async listAll(){
+    const ids=new Set(); let pt='';
+    do{ const j=await (await this.fetch(API+'/files?'+new URLSearchParams({q:`trashed=false and mimeType!='${FOLDER}'`,fields:'nextPageToken,files(id)',pageSize:'1000',spaces:'drive',...(pt?{pageToken:pt}:{})}))).json();
+      (j.files||[]).forEach(f=>ids.add(f.id)); pt=j.nextPageToken||''; }while(pt);
+    return ids;
+  },
+  soon(){ clearTimeout(this.t); if(this.on()) this.t=setTimeout(()=>this.now(),4000); },
+  async now(){
+    if(!this.on()||!this.cid()){ this.ui(); return; }
+    if(!this.token()){ this.state='auth'; this.ui(); return; }
+    if(!navigator.onLine){ this.state='offline'; this.ui(); return; }
+    if(this.busy){ this.again=true; return; }
+    this.busy=true; this.state='syncing'; this.ui();
+    try{ await this.run(); this.last=Date.now(); LS.set('fs_g_last',this.last); this.state='ok'; this.err=null; }
+    catch(e){ this.err=e; this.state=e?.code==='auth'?'auth':e?.code==='offline'?'offline':'error'; }
+    this.busy=false; this.ui(); window.FS_CORE?.refreshUsage?.();
+    if(this.again){ this.again=false; setTimeout(()=>this.now(),500); }
+  },
+  async readVault(root){
+    let vid=LS.get('fs_g_vault',null);
+    if(!vid){ vid=await this.findOne(`${qs(root)} in parents and appProperties has { key='fs_vault' and value='1' }`); if(vid) LS.set('fs_g_vault',vid); }
+    if(!vid) return {vid:null,docs:{},version:null};
+    try{
+      const version=await this.version(vid);
+      const j=await (await this.download(vid)).text(); return {vid,docs:JSON.parse(j).docs||{},version};
+    }catch(e){ if(e.code==='drive_404'){ LS.del('fs_g_vault'); return {vid:null,docs:{},version:null}; } throw e; }
+  },
+  async version(id){ return (await (await this.fetch(API+'/files/'+id+'?fields=version')).json()).version;
+  },
+  merge(L,R){
+    const out=new Map(); let changed=false;
+    for(const id of new Set([...L.keys(),...Object.keys(R)])){
+      const l=L.get(id), r=R[id]?{...R[id],__id:id}:null; let w;
+      if(!r) w=l; else if(!l){ w=r; changed=true; }
+      else if((r.updatedAt||0)>(l.updatedAt||0)){ w={...r}; changed=true; } else w={...l};
+      // Sync bookkeeping travels separately from the user's edits: take it from whichever copy changed it last.
+      if(l&&r){ const src=(r.syncAt||0)>(l.syncAt||0)?r:(l.syncAt||0)>(r.syncAt||0)?l:null;
+        if(src) SYNC_KEYS.forEach(k=>{ w[k]=src[k]??null; });
+        else { const o=w===l?r:l; SYNC_KEYS.forEach(k=>{ if(w[k]==null && o[k]!=null) w[k]=o[k]; }); }
+        if(l.driveTrashed||r.driveTrashed) w.driveTrashed=true;
+        if(JSON.stringify(SYNC_KEYS.map(k=>w[k]??null))!==JSON.stringify(SYNC_KEYS.map(k=>(L.get(id)||{})[k]??null))) changed=true; }
+      out.set(id,w);
+    }
+    return {out,changed};
+  },
+  async run(){
+    const root=await this.root();
+    const {vid,docs:R}=await this.readVault(root);
+    const L=new Map((await idb.all('docs')).map(d=>[d.__id,d]));
+    const {out,changed}=this.merge(L,R);
+    for(const [id,w] of out){ if(JSON.stringify(w)!==JSON.stringify(L.get(id))) await idb.put('docs',id,w); }
+    if(changed) emit();
+    let remote=null; try{ remote=await this.listAll(); }catch(e){ if(e.code==='auth'||e.code==='offline') throw e; }
+    const st=out.get('settings'), stOK=st&&!st.deleted?st:{};
+    const pp=window.FS_CORE?.pathParts?(f=>window.FS_CORE.pathParts(f,stOK)):null;
+    for(const [id,w] of out){
+      if(w.deleted){
+        for(const k of [w.asset,w.thumb]) if(k) await idb.del('blobs',k).catch(()=>{});
+        if(!w.driveTrashed && (w.driveId||w.driveThumbId)){
+          for(const d of [w.driveId,w.driveThumbId]) if(d){ try{ await this.fetch(API+'/files/'+d,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:true})}); }catch(e){ if(e.code==='auth'||e.code==='offline') throw e; } }
+          w.driveTrashed=true; w.syncAt=Date.now(); await idb.put('docs',id,w);
+        }
+        continue;
+      }
+      if(w.kind!=='file'||!pp) continue;
+      const parts=pp(w), want=parts.join('/')+'/'+w.name; let dirty=false;
+      if(remote){
+        if(w.driveId && !remote.has(w.driveId)){
+          if(await idb.get('blobs',w.asset)){ w.driveId=null; w.drivePath=null; w.remoteMissing=false; }   // deleted in Drive: upload again from this device
+          else if(!w.remoteMissing) w.remoteMissing=true;
+          dirty=true;
+        } else if(w.remoteMissing && w.driveId && remote.has(w.driveId)){ w.remoteMissing=false; dirty=true; }
+        if(w.driveThumbId && !remote.has(w.driveThumbId)){ w.driveThumbId=null; dirty=true; }
+      }
+      if(!w.driveId){
+        const blob=await idb.get('blobs',w.asset);
+        if(blob){
+          let parent; try{ parent=await this.path(parts); w.driveId=await this.upload(blob,{name:w.name,parents:[parent],appProperties:{fs_id:id}}); }
+          catch(e){ if(e.code!=='drive_404') throw e; LS.set('fs_g_folders',{}); parent=await this.path(parts); w.driveId=await this.upload(blob,{name:w.name,parents:[parent],appProperties:{fs_id:id}}); }
+          w.drivePath=want; dirty=true;
+        }
+      } else if(w.drivePath!==want){
+        try{
+          const parent=await this.path(parts); const cur=await (await this.fetch(API+'/files/'+w.driveId+'?fields=parents')).json();
+          const q=new URLSearchParams({addParents:parent,removeParents:(cur.parents||[]).filter(p=>p!==parent).join(','),fields:'id'});
+          await this.fetch(API+'/files/'+w.driveId+'?'+q,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:w.name})});
+          w.drivePath=want; dirty=true;
+        }catch(e){ if(e.code==='auth'||e.code==='offline') throw e; if(e.code==='drive_404'){ w.driveId=null; w.drivePath=null; dirty=true; } }
+      }
+      if(w.thumb && !w.driveThumbId){
+        const tb=await idb.get('blobs',w.thumb);
+        if(tb){ const tp=await this.path(['_app-data','thumbnails']); w.driveThumbId=await this.upload(tb,{name:id+'.jpg',parents:[tp]}); dirty=true; }
+      }
+      if(dirty){ w.syncAt=Date.now(); await idb.put('docs',id,w); }
+    }
+    // Write the merged index back. Re-read it first and check its version right before writing,
+    // so a write from another device in the meantime is merged in instead of overwritten.
+    for(let attempt=0; attempt<4; attempt++){
+      const latest=await this.readVault(root); const again=this.merge(new Map((await idb.all('docs')).map(d=>[d.__id,d])),latest.docs);
+      for(const [id,w] of again.out) await idb.put('docs',id,w);
+      if(again.changed) emit();
+      const docs={}; for(const [id,w] of again.out){ const c={...w}; delete c.__id; docs[id]=c; }
+      if(JSON.stringify(latest.docs)===JSON.stringify(docs)) return;
+      const blob=new Blob([JSON.stringify({app:'FileSaathi',version:1,updated:new Date().toISOString(),docs})],{type:'application/json'});
+      if(latest.vid){
+        if(await this.version(latest.vid)!==latest.version){ await new Promise(r=>setTimeout(r,400+Math.random()*800)); continue; }
+        await this.fetch(UP+'/files/'+latest.vid+'?uploadType=media',{method:'PATCH',headers:{'Content-Type':'application/json'},body:blob});
+      } else {
+        const id=await this.upload(blob,{name:'FileSaathi-index.json',parents:[root],appProperties:{fs_vault:'1'},description:'FileSaathi keeps file names, folders and dates here. Do not edit or delete.'}); LS.set('fs_g_vault',id);
+      }
+      return;
+    }
+    throw {code:'busy_other_device'};
+  },
+  ago(){ const s=Math.round((Date.now()-this.last)/1000); return s<60?'just now':s<3600?Math.round(s/60)+' min ago':s<86400?Math.round(s/3600)+' h ago':Math.round(s/86400)+' d ago'; },
+  ui(){
+    const chip=document.getElementById('syncChip'); if(!chip) return;
+    chip.hidden=false;
+    const ic='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12a9 9 0 0 1 15.5-6.2"/><path d="M21 4v5h-5M3 20v-5h5"/></svg>';
+    let t;
+    if(!this.cid()||!this.on()) t='Connect Google Drive';
+    else if(this.state==='syncing') t='Syncing…';
+    else if(this.state==='auth'||!this.token()) t='Reconnect Drive';
+    else if(this.state==='offline') t='Offline · will sync';
+    else if(this.state==='error') t=this.err?.code==='busy_other_device'?'Another device is syncing · retry':'Sync problem · retry';
+    else t=this.last?'Synced '+this.ago():'Sync now';
+    chip.innerHTML=ic+' '+t; chip.dataset.state=this.state;
+    window.FS_CORE?.refreshSettings?.();
+  }
+};
+window.addEventListener('online',()=>Sync.now());
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') Sync.now(); });
+setInterval(()=>{ if(document.visibilityState==='visible' && Sync.on() && Sync.token()) Sync.now(); else Sync.ui(); },120000);
+const urls=new Map();
+const rid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(16)+Math.random().toString(16).slice(2)).replace(/-/g,'');
+const assets={
+  async upload(blob,opts){ const id=rid(); const b=opts?.type&&blob.type!==opts.type?new Blob([blob],{type:opts.type}):blob; await idb.put('blobs',id,b); return {id,url:'',sizeBytes:b.size,contentType:b.type}; },
+  async delete(id){ const u=urls.get(id); if(u){ URL.revokeObjectURL(u); urls.delete(id); } await idb.del('blobs',id); return {deleted:true}; },
+  async list(){
+    const keys=await idb.keys('blobs'); let bytes=0, maxBytes=0;
+    try{ const est=await navigator.storage.estimate(); bytes=est.usage||0; maxBytes=est.quota||0; }catch{}
+    return {assets:[],usage:{files:keys.length,bytes,maxBytes,maxFiles:0}};
+  }
+};
+const dl={ async save({filename,data}){
+  const blob=data instanceof Blob?data:new Blob([data]); const u=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=u; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),60000); return {status:'saved'};
+}};
+
+/* AI through the user's own Anthropic API key */
+const KEY='fs_api_key';
+const getKey=()=>{ try{ return localStorage.getItem(KEY)||''; }catch{ return ''; } };
+const b64=blob=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(blob); });
+async function callClaude(prompt,opts={},key=getKey()){
+  if(!key) throw {code:'not_granted'};
+  const content=[];
+  for(const b of [].concat(opts.images||[])) content.push({type:'image',source:{type:'base64',media_type:b.type||'image/jpeg',data:await b64(b)}});
+  content.push({type:'text',text:prompt});
+  let r; const ctl=new AbortController(); const tm=setTimeout(()=>ctl.abort(),90000);
+  if(opts.signal) opts.signal.addEventListener('abort',()=>ctl.abort());
+  try{
+    r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctl.signal,headers:{'content-type':'application/json','x-api-key':key,
+      'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:opts.modelTier==='quick'?'claude-haiku-5-5':'claude-sonnet-5-5',max_tokens:opts.max||1500,messages:[{role:'user',content}]})});
+  }catch{ clearTimeout(tm); throw {code:ctl.signal.aborted?'timeout':'offline'}; }
+  clearTimeout(tm);
+  if(r.status===401||r.status===403) throw {code:'bad_key'};
+  if(r.status===429||r.status===529) throw {code:'rate_limited'};
+  if(!r.ok) throw {code:'upstream_error'};
+  const j=await r.json(); const t=(j.content||[]).map(c=>c.text||'').join('');
+  const m=t.match(/\{[\s\S]*\}/); if(!m) return null;
+  try{ return JSON.parse(m[0]); }catch{ return null; }
+}
+const sample={ json:(p,o)=>callClaude(p,o) };
+
+/* Offline text scanning (OCR): Tesseract with English + Hindi, all files bundled in libs/tesseract */
+const OCR={worker:null,loading:null,idle:null,
+  loadScript(src){ return new Promise((res,rej)=>{ if(window.Tesseract) return res(); const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej({code:'ocr_load'}); document.head.appendChild(s); }); },
+  async get(){
+    if(this.worker) return this.worker;
+    if(!this.loading) this.loading=(async()=>{
+      await this.loadScript('libs/tesseract/tesseract.min.js');
+      const w=await Tesseract.createWorker(['eng','hin'],1,{workerPath:'libs/tesseract/worker.min.js',corePath:'libs/tesseract/core',langPath:'libs/tesseract/lang',gzip:true,workerBlobURL:false});
+      this.worker=w; return w;
+    })().catch(e=>{ this.loading=null; throw e; });
+    return this.loading;
+  },
+  async read(blob){
+    clearTimeout(this.idle);
+    const w=await this.get(); const {data}=await w.recognize(blob);
+    this.idle=setTimeout(()=>{ try{ this.worker?.terminate(); }catch{} this.worker=null; this.loading=null; },90000);
+    return data?.text||'';
+  }
+};
+const ENGINE_KEY='fs_engine';
+const getEngine=()=>{ try{ return localStorage.getItem(ENGINE_KEY)||'offline'; }catch{ return 'offline'; } };
+
+let installEvt=null, installCb=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; installCb&&installCb(); });
+const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+let canFiles=false; try{ canFiles=!!(navigator.canShare&&navigator.canShare({files:[new File(['x'],'x.txt',{type:'text/plain'})]})); }catch{}
+
+let swState=!('serviceWorker' in navigator)?'unsupported':!location.protocol.startsWith('http')?'file':'pending', swErr='';
+if(swState==='pending') navigator.serviceWorker.register('./sw.js').then(reg=>{ swState='installing';
+    const done=()=>{ swState='ready'; window.FS_CORE?.refreshSettings?.(); };
+    if(reg.active) done(); else { const w=reg.installing||reg.waiting; w?.addEventListener('statechange',()=>{ if(w.state==='activated') done(); if(w.state==='redundant'){ swState='failed'; swErr='install failed'; window.FS_CORE?.refreshSettings?.(); } }); }
+  }).catch(e=>{ swState='failed'; swErr=e?.message||'error'; window.FS_CORE?.refreshSettings?.(); });
+
+window.FS_PLATFORM = {
+  waTip: canFiles
+    ? 'From WhatsApp: on Android, tap Share on the file and pick FileSaathi. On iPhone, save it first, then choose it here.'
+    : 'From WhatsApp: save the file, then choose it here. Once installed on Android, you can share straight into FileSaathi.',
+  shareHelp: 'Your browser cannot attach files to other apps directly, so the file is saved to your Downloads. Attach it in WhatsApp or your email.',
+  privacy: 'Your files live on this device and, once connected, in your own Google Drive. Nothing goes to GitHub or to us. Your AI key stays on this device. Without Drive sync, download a backup now and then, because clearing browser data removes the vault.',
+  canShareFiles: canFiles,
+  officeOK: true,
+  ocr: blob=>OCR.read(blob),
+  engine: ()=>getEngine()==='claude'&&getKey()?'claude':'offline',
+  pdfWorker: 'libs/pdf.worker.min.js',
+  missingHelp: 'These files are not on this device and could not be downloaded from Google Drive. Check your internet and that Drive is connected (top button), then try again.',
+  fileBadge(f){
+    if(!Sync.on()||f.trashedAt) return '';
+    if(f.remoteMissing) return '<span class="pill late" title="This file was removed from Google Drive outside FileSaathi and is not on this device">Missing in Drive</span>';
+    return !f.driveId?'<span class="pill fz" title="Will be uploaded at the next sync">Not in Drive yet</span>':'';
+  },
+  backupNudge(n){
+    if(!n||Sync.on()) return null;
+    let b=null; try{ b=JSON.parse(localStorage.getItem('fs_last_backup')||'null'); }catch{}
+    if(b && Date.now()-new Date(b.at).getTime()<30*864e5) return null;
+    return 'Your files are stored only on this device. Connect Google Drive or download a backup from Settings so nothing is lost if this device is lost or reset.';
+  },
+  async shareFiles(files,text,title){
+    try{ await navigator.share({files,title,text}); return true; }
+    catch(e){ if(e?.name==='AbortError') return true; return false; }
+  },
+  async init(){
+    if(!('indexedDB' in window)) return {error:'This browser cannot store files. Please open FileSaathi in Chrome, Edge or Safari.'};
+    try{ await openDB(); }catch{ return {error:'Local storage is blocked in this browser window (private mode?). Open FileSaathi in a normal window.'}; }
+    try{ await navigator.storage?.persist?.(); }catch{}
+    const key=getKey();
+    Sync.ui(); setTimeout(()=>Sync.now(),1500);
+    return {col,assets,dl,sample:key?sample:null,imgOK:true,
+      warn: location.protocol==='file:' ? 'Opened as a local file. Everything works, but installing the app and sharing from WhatsApp need FileSaathi to be opened from a web address (see README).' : null};
+  },
+  async getBlob(id){
+    let b=await idb.get('blobs',id); if(b) return b;
+    const rec=(await idb.all('docs')).find(d=>!d.deleted&&(d.asset===id||d.thumb===id));
+    const did=rec&&(rec.asset===id?rec.driveId:rec.driveThumbId);
+    if(!did) throw new Error('missing');
+    b=await Sync.download(did); if(rec.asset===id&&rec.type) b=new Blob([b],{type:rec.type});
+    await idb.put('blobs',id,b); return b;
+  },
+  async srcFor(id){ if(urls.has(id)) return urls.get(id); let b; try{ b=await this.getBlob(id); }catch{ return ''; } const u=URL.createObjectURL(b); urls.set(id,u); return u; },
+  syncSettings(){
+    const cid=Sync.cid(), on=Sync.on(), email=LS.get('fs_g_email',''), root=LS.get('fs_g_root',null);
+    const status=!cid?'Not set up yet.':!on?'Not connected.':!Sync.token()?`Connected${email?' as <b>'+email.replace(/[<>&]/g,'')+'</b>':''}, but the session expired. Press Reconnect.`
+      :`Connected${email?' as <b>'+email.replace(/[<>&]/g,'')+'</b>':''}. ${Sync.last?'Last synced '+Sync.ago()+'.':''}${Sync.state==='error'?' The last sync failed ('+(Sync.err?.code||'error')+').':''}`;
+    return `<p>Your files are saved into a <b>FileSaathi</b> folder in your own Google Drive, sorted into master folders, sub-folders and years, and kept in sync on every device where you connect. FileSaathi can only see the files it created.</p>
+      <p>${status}</p>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="gCid" value="${(cid||'').replace(/"/g,'&quot;')}" placeholder="Google OAuth Client ID (…apps.googleusercontent.com)" autocomplete="off" style="flex:1 1 260px;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);font-family:var(--f-mono);font-size:.78rem" aria-label="Google Client ID">
+        <button class="btn" id="gSaveCid">Save ID</button></div>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+        ${!on||!Sync.token()?`<button class="btn primary" id="gConnect"${cid?'':' disabled'}>${on?'Reconnect':'Connect Google Drive'}</button>`:`<button class="btn primary" id="gSync">Sync now</button>`}
+        ${root&&on?`<a class="btn" href="https://drive.google.com/drive/folders/${encodeURIComponent(root)}" target="_blank" rel="noopener">Open in Drive</a>`:''}
+        ${on?'<button class="btn danger" id="gOff">Disconnect</button>':''}</div>
+      <p style="font-size:.8rem">Setup steps are in SETUP-GUIDE.txt. Once the Client ID is in config.js on GitHub, every device picks it up automatically.</p>`;
+  },
+  async takeShared(){
+    if(new URLSearchParams(location.search).has('shared')) history.replaceState(null,'',location.pathname);
+    const out=[];
+    try{
+      for(const k of await idb.keys('inbox')){
+        const f=await idb.get('inbox',k);
+        if(f instanceof Blob) out.push({file:f instanceof File?f:new File([f],'Shared file',{type:f.type,lastModified:Date.now()}), ack:()=>idb.del('inbox',k)});
+        else await idb.del('inbox',k);
+      }
+    }catch{}
+    return out;
+  },
+  onInstallable(cb){ installCb=cb; if(installEvt) cb(); },
+  async install(){ if(!installEvt) return false; installEvt.prompt(); const r=await installEvt.userChoice; installEvt=null; return r.outcome==='accepted'; },
+  installHelp(){
+    const off={ready:'<p>Offline: <b style="color:var(--ok)">ready</b>. FileSaathi opens and works without internet; changes sync when you are back online.</p>',
+      installing:'<p>Offline: getting ready…</p>',pending:'<p>Offline: getting ready…</p>',
+      failed:`<p>Offline: <b style="color:var(--danger)">setup failed</b>${swErr?' ('+swErr.replace(/[<>&]/g,'')+')':''}. The app still works online. Reload the page to try again.</p>`,
+      file:'<p>Offline and installing need FileSaathi to be opened from its web address, not as a local file.</p>',
+      unsupported:'<p>This browser cannot keep FileSaathi offline.</p>'}[swState]||'';
+    if(standalone()) return '<p>FileSaathi is installed on this device.</p>'+off;
+    return `<p><b>Android or computer (Chrome, Edge):</b> press "Install app" at the top, or open the browser menu and choose Install.</p>
+      <p><b>iPhone or iPad (Safari):</b> tap the Share button, then "Add to Home Screen".</p>
+      <p>Installing needs FileSaathi to be opened from a web address (https). The README in the download explains a free way to host it.</p>`+off;
+  },
+  aiSettings(){
+    const k=getKey(); const masked=k?k.slice(0,10)+'…'+k.slice(-4):''; const eng=getEngine();
+    const opt=(v,t,d,dis)=>`<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid ${eng===v?'var(--indigo)':'var(--line)'};border-radius:12px;cursor:${dis?'not-allowed':'pointer'};opacity:${dis?.55:1}">
+      <input type="radio" name="engine" id="eng_${v}" value="${v}"${eng===v?' checked':''}${dis?' disabled':''} style="margin-top:4px;accent-color:var(--indigo)"><span><b>${t}</b><br><span style="color:var(--muted);font-size:.86rem">${d}</span></span></label>`;
+    return `<div style="display:flex;flex-direction:column;gap:8px">
+      ${opt('offline','On this device (free, offline)','Scans the text in photos and scanned PDFs (English and Hindi), then works out the document type, dates, amount and issuer with built-in rules. Nothing leaves your device. Good for bills, IDs, tickets and receipts; check the names it suggests.')}
+      ${opt('claude','Claude AI (most accurate)','Understands any document and writes better names and summaries. Needs your Claude API key below; usage is billed by Anthropic and the file\'s image or text is sent to Anthropic.',!k)}
+      </div>
+      <p style="margin-top:6px">Claude API key from console.anthropic.com (only needed for Claude AI). It stays on this device.</p>
+      ${k?`<p>Key saved: <code style="font-family:var(--f-mono)">${masked}</code></p>`:''}
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><input id="apiKey" type="password" autocomplete="off" placeholder="sk-ant-…" style="flex:1 1 220px;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg)" aria-label="Claude API key">
+      <button class="btn primary" id="saveKey">Save &amp; test</button>${k?'<button class="btn danger" id="clearKey">Remove key</button>':''}</div>`;
+  },
+  async onClick(id,{toast,renderSettings}){
+    const gErr=e=>({no_client_id:'Add your Google Client ID first (Settings).',gis_blocked:'Google sign-in could not load. Check your internet connection.',
+      popup_closed:'The Google sign-in window was closed.',popup_failed_to_open:'Allow pop-ups for this site, then try again.',access_denied:'Google access was not allowed.',
+      idpiframe_initialization_failed:'This web address is not allowed in your Google Client ID. Add it under Authorized JavaScript origins.'}[e?.code]||('Google sign-in failed ('+(e?.code||'error')+')'));
+    if(id==='syncChip'){
+      if(!Sync.cid()||!Sync.on()){ document.getElementById('settingsBtn').click(); return; }
+      if(!Sync.token()){ try{ const r=await Sync.connect(); if(r?.switched) toast(`Connected to a different Google account (${r.email}). Your files will be copied into this account's Drive.`,7000); }catch(e){ toast(gErr(e),6000); } return; }
+      Sync.now(); return;
+    }
+    if(id==='gSaveCid'){ const v=(document.getElementById('gCid').value||'').trim();
+      if(v && !/\.apps\.googleusercontent\.com$/.test(v)){ toast('That does not look like a Client ID. It ends with .apps.googleusercontent.com',6000); return; }
+      LS.set('fs_g_cid',v); Sync.ui(); renderSettings(); toast(v?'Client ID saved. Now press Connect Google Drive.':'Client ID cleared'); return; }
+    if(id==='gConnect'){ try{ const r=await Sync.connect(); toast(r?.switched?`Connected to a different Google account (${r.email}). Your files will be copied into this account's Drive.`:'Google Drive connected. Syncing your files…',7000); }catch(e){ toast(gErr(e),6000); } renderSettings(); return; }
+    if(id==='gSync'){ Sync.now(); return; }
+    if(id==='gOff'){ Sync.disconnect(); renderSettings(); toast('Disconnected. Your files stay on this device and in Drive.'); return; }
+    if(id==='saveKey'){
+      const v=(document.getElementById('apiKey').value||'').trim(); if(!v){ toast('Paste your API key first'); return; }
+      toast('Testing the key…',0);
+      try{ const r=await callClaude('Reply with exactly this JSON and nothing else: {"ok":true}',{modelTier:'quick',max:30},v);
+        try{ localStorage.setItem(KEY,v); localStorage.setItem(ENGINE_KEY,'claude'); }catch{} window.FS_CORE.setSample(sample,true);
+        toast(r&&r.ok===true?'Key works and is saved. New files will be read by AI.':'Key saved, but the test reply was unexpected. If files are not renamed, check the key.',6000); renderSettings(); }
+      catch(e){ toast(e?.code==='bad_key'?'That key was rejected. Check it and try again.':e?.code==='offline'?'No internet connection':'The key could not be tested ('+(e?.code||'error')+')',5000); }
+    }
+    if(id==='clearKey'){ try{ localStorage.removeItem(KEY); localStorage.setItem(ENGINE_KEY,'offline'); }catch{} window.FS_CORE.setSample(null,false); toast('Key removed. Files are now read on this device.'); renderSettings(); }
+  }
+};
+})();
+
+</script>
+<script>
+(() => {
+const P = window.FS_PLATFORM;
+const CATS = [
+  {id:'bills',name:'Bills & Utilities',h:28},{id:'id',name:'ID & KYC',h:248},{id:'bank',name:'Bank & Finance',h:200},
+  {id:'tax',name:'Tax & GST',h:12},{id:'receipts',name:'Receipts & Invoices',h:45},{id:'medical',name:'Medical',h:350},
+  {id:'education',name:'Education',h:270},{id:'work',name:'Work & Office',h:220},{id:'property',name:'Property & Legal',h:160},
+  {id:'vehicle',name:'Vehicle',h:185},{id:'insurance',name:'Insurance',h:135},{id:'travel',name:'Travel & Tickets',h:300},
+  {id:'screenshots',name:'Screenshots',h:230},{id:'photos',name:'Photos',h:95},{id:'others',name:'Others',h:60},
+];
+const ACCEPT = {'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif','application/pdf':'pdf','text/plain':'txt','text/csv':'csv','application/json':'json','text/markdown':'md'};
+const EXT2TYPE = {png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',pdf:'application/pdf',txt:'text/plain',csv:'text/csv',json:'application/json',md:'text/markdown'};
+const REMIND_DAYS = 45;
+const LIBVIEWS = ['all','star','alert','review','month','undated','trash'];
+const DEFAULT_NOTE = 'Typos are fine. Similar spellings still match, and Hindi words like bijli, dawai or gaadi work too.';
+
+const S = {col:null,assets:null,sample:null,dl:null,imgOK:false,
+  files:[],settings:{folders:[],masters:[]},master:'all',view:'all',q:'',sort:'date_desc',year:'all',sel:new Set(),
+  queue:[],busy:false,panel:null,open:null,confirmDel:false,ready:false,ai:null,share:null,index:new Map(),
+  qSort:'relevance',dirty:false,pendingHashes:new Set(),pendingNames:new Map(),lastFocus:null};
+try{ S.upMaster=localStorage.getItem('fs_upMaster')||'general'; S.useAI=localStorage.getItem('fs_useAI')!=='0'; }catch{ S.upMaster='general'; S.useAI=true; }
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2,'0');
+const isoOf = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const todayISO = () => isoOf(new Date());
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONFULL = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+const fmtDate = iso => { if(!iso) return ''; const [y,m,d]=iso.split('-'); return (d?(+d)+' ':'')+(m?MON[+m-1]+' ':'')+y; };
+const daysTo = iso => { if(!iso) return null; return Math.round((new Date(iso+'T00:00:00')-new Date(todayISO()+'T00:00:00'))/864e5); };
+const fmtSize = b => b<1024?b+' B':b<1048576?(b/1024).toFixed(0)+' KB':b<1073741824?(b/1048576).toFixed(1)+' MB':(b/1073741824).toFixed(1)+' GB';
+const validISO = s => { if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null; const [y,m,d]=s.split('-').map(Number); const t=new Date(y,m-1,d);
+  return t.getFullYear()===y&&t.getMonth()===m-1&&t.getDate()===d&&y>=1900&&y<=2100 ? s : null; };
+const slug = s => String(s||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9ऀ-ॿ]+/g,'-').replace(/^-+|-+$/g,'').slice(0,48);
+const cleanDir = s => String(s).replace(/[\\/:*?"<>|&]+/g,'-').replace(/\s+/g,' ').trim();
+const dotColor = h => `hsl(${h} 58% 50%)`;
+const plural = (n,w) => `${n} ${w}${n===1?'':'s'}`;
+
+/* ---------- folders ---------- */
+function masters(){ return [{id:'general',name:S.settings.generalName||'Personal',h:42}, ...(S.settings.masters||[])]; }
+function masterOf(id){ return masters().find(m=>m.id===(id||'general')) || masters()[0]; }
+function allFolders(){ return [...CATS, ...(S.settings.folders||[]).map(f=>({...f,custom:true}))]; }
+function catOf(id){ return allFolders().find(c=>c.id===id) || {id,name:'Others',h:60}; }
+const mOf = f => f.master || 'general';
+const live = () => S.files.filter(f=>!f.trashedAt);
+
+function toast(msg,ms=3200){ const t=$('#toast'); t.textContent=msg; t.hidden=false; toast.fn=null; clearTimeout(toast.t); if(ms) toast.t=setTimeout(()=>t.hidden=true,ms); }
+function toastAction(msg,label,fn,ms=7000){ const t=$('#toast'); t.innerHTML=`${esc(msg)} <button id="toastAct" style="margin-left:10px;border:0;background:none;color:inherit;font-weight:700;text-decoration:underline;cursor:pointer">${esc(label)}</button>`;
+  t.hidden=false; toast.fn=fn; clearTimeout(toast.t); toast.t=setTimeout(()=>{ t.hidden=true; toast.fn=null; },ms); }
+const withTimeout=(p,ms,code='timeout')=>new Promise((res,rej)=>{ const t=setTimeout(()=>rej({code}),ms); p.then(v=>{ clearTimeout(t); res(v); },e=>{ clearTimeout(t); rej(e); }); });
+function banner(msg){ const b=$('#banner'); b.hidden=!msg; b.textContent=msg||''; }
+async function saveSettings(patch){ const next={kind:'settings',folders:[],masters:[],...S.settings,...patch}; delete next.__id; await S.col.doc('settings').set(next); }
+function hydrate(root=document){
+  root.querySelectorAll('img[data-blob]:not([data-done])').forEach(img=>{
+    img.dataset.done='1';
+    P.srcFor(img.dataset.blob).then(u=>{ if(u) img.src=u; }).catch(()=>{});
+  });
+}
+
+/* ---------- boot ---------- */
+(async function boot(){
+  const h=new Date().getHours(); $('#hello').firstChild.nodeValue = h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  $('#waTipText').textContent = P.waTip;
+  render();
+  const r = await P.init();
+  if(r.error){ banner(r.error); render(); return; }
+  if(r.warn) banner(r.warn);
+  S.col=r.col; S.assets=r.assets; S.dl=r.dl; S.sample=r.sample; S.imgOK=!!r.imgOK;
+  if(P.officeOK){ Object.assign(ACCEPT,OFFICE_TYPES); Object.assign(EXT2TYPE,OFFICE_EXT); $('#pickFiles').accept+=',.docx,.xlsx,.doc,.xls'; }
+  S.col.onSnapshot(snap=>{
+    const files=[]; let settings={folders:[],masters:[]};
+    snap.docs.forEach(d=>{ const x=d.data(); if(!x) return; if(d.id==='settings') settings={folders:[],masters:[],...x}; else if(x.kind==='file') files.push({...x,id:d.id}); });
+    S.files=files; S.settings=settings; S.ready=true; buildIndex();
+    const have=new Set(files.map(f=>f.hash).filter(Boolean)); for(const h of [...S.pendingHashes]) if(have.has(h)) S.pendingHashes.delete(h);
+    const names=new Set(files.map(f=>f.folder+'\n'+(f.name||'').toLowerCase()));
+    for(const [fo,set] of S.pendingNames) for(const x of [...set]) if(names.has(fo+'\n'+x)) set.delete(x);
+    for(const id of [...S.sel]) if(!files.some(f=>f.id===id)) S.sel.delete(id);
+    if(S.master!=='all' && !masters().some(m=>m.id===S.master)) S.master='all';
+    if(!masters().some(m=>m.id===S.upMaster)) S.upMaster='general';
+    render();
+    if(S.panel==='file'){ if(S.dirty){ const nb=$('#dChanged'); if(nb) nb.hidden=!files.some(f=>f.id===S.open); } else renderFile(); }
+    if(S.panel==='manage') renderManage();
+  }, err=>banner('Your files could not be loaded ('+(err?.code||'error')+'). Please reload in a moment.'));
+  refreshUsage();
+  if(P.onInstallable) P.onInstallable(()=>{ $('#installBtn').hidden=false; });
+  if(P.takeShared){ const shared=await P.takeShared(); if(shared?.length){ toast(`Received ${plural(shared.length,'file')} from another app`); enqueue(shared); } }
+  if(P.backupNudge) setTimeout(()=>{ const msg=P.backupNudge(live().length); if(msg && $('#banner').hidden) banner(msg); },4000);
+})();
+async function refreshUsage(){ if(!S.assets) return; try{ S.usage=(await S.assets.list()).usage; renderMeter(); }catch{} }
+
+/* ---------- smart search ---------- */
+const STOP = new Set(['ka','ki','ke','ko','me','mein','se','wala','wali','wale','aur','the','of','and','for','my','a','an','in','to','file','files','document','documents','doc','docs','mera','meri','mere','hai','show','find','wo','vo','ye']);
+const SYN = {
+  bijli:['electricity','electric','power','jvvnl','discom'],light:['electricity'],paani:['water'],pani:['water'],gas:['gas','lpg','cylinder'],
+  dawai:['medicine','medical','pharmacy','prescription'],dawa:['medicine','medical'],davai:['medicine','medical'],doctor:['medical','hospital','prescription'],
+  aspatal:['hospital','medical'],hospital:['hospital','medical'],report:['report','lab','test'],ghar:['house','home','property','rent'],makan:['house','property'],
+  home:['house','home','property'],house:['house','home','property'],kiraya:['rent'],gaadi:['vehicle','car','bike','rc'],gadi:['vehicle','car','bike'],
+  bike:['vehicle','bike'],car:['vehicle','car'],bima:['insurance','policy'],policy:['insurance','policy'],padhai:['education','school','college'],
+  school:['school','education'],marksheet:['marksheet','result','education'],naukri:['work','job','office','salary'],job:['work','job','office'],
+  tankhwah:['salary','payslip'],salary:['salary','payslip'],rasid:['receipt'],raseed:['receipt'],bill:['bill','invoice'],invoice:['invoice','bill'],
+  ticket:['ticket','travel'],train:['train','irctc','railway'],rail:['train','irctc','railway'],flight:['flight','airline','boarding'],hawai:['flight'],
+  aadhar:['aadhaar','uidai'],adhar:['aadhaar','uidai'],aadhaar:['aadhaar','uidai'],pan:['pan','income'],licence:['license','driving'],
+  license:['license','driving'],dl:['license','driving'],kar:['tax'],tax:['tax','gst','itr'],khata:['account','bank'],passbook:['bank','passbook','statement'],
+  ss:['screenshot','screenshots'],shaadi:['marriage','wedding'],janam:['birth'],papa:['papa','father','dad'],dad:['papa','father','dad'],
+  father:['papa','father','dad'],mummy:['mummy','mother','mom'],mom:['mummy','mother','mom'],mother:['mummy','mother','mom'],maa:['mummy','mother'],
+  bhai:['bhai','brother'],brother:['bhai','brother'],loan:['loan','emi'],emi:['emi','loan'],phone:['mobile','phone','recharge'],
+  recharge:['recharge','mobile'],net:['internet','broadband','wifi'],wifi:['internet','broadband','wifi'],medicine:['medicine','medical','pharmacy']
+};
+function norm(s){ return String(s||'').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9ऀ-ॿ]+/g,' ').trim(); }
+function squash(w){ return w.replace(/ph/g,'f').replace(/w/g,'v').replace(/ee|ii/g,'i').replace(/oo|uu/g,'u').replace(/sh/g,'s').replace(/ck|q/g,'k').replace(/z/g,'j').replace(/y/g,'i').replace(/h/g,'').replace(/(.)\1+/g,'$1'); }
+function osa(a,b,max){
+  if(Math.abs(a.length-b.length)>max) return max+1;
+  let pp=null, p=Array.from({length:b.length+1},(_,j)=>j);
+  for(let i=1;i<=a.length;i++){ const c=[i]; let mn=i;
+    for(let j=1;j<=b.length;j++){ let v=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));
+      if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1]) v=Math.min(v,pp[j-2]+1); c[j]=v; if(v<mn) mn=v; }
+    if(mn>max) return max+1; pp=p; p=c; }
+  return p[b.length];
+}
+function buildIndex(){
+  S.index=new Map();
+  for(const f of S.files){
+    const parts=[f.name,f.original,f.title,f.issuer,f.person,f.amount,f.summary,(f.tags||[]).join(' '),(f.keywords||[]).join(' '),f.notes,
+      catOf(f.folder).name,masterOf(f.master).name,f.ext,(f.text||'').slice(0,8000)];
+    if(f.date){ const [y,m]=f.date.split('-'); parts.push(y, MON[+m-1], MONFULL[+m-1]); }
+    if(f.type?.startsWith('image/')) parts.push('image photo');
+    const toks=new Set(norm(parts.join(' ')).split(' ').filter(t=>t.length>1));
+    S.index.set(f.id,[...toks].map(t=>({t,s:squash(t)})));
+  }
+}
+function tokScore(q,toks){
+  const qs=squash(q), num=/^\d+$/.test(q); let best=0, via=null;
+  for(const {t,s:ts} of toks){
+    let s=0, fz=false;
+    if(t===q) s=3;
+    else if(t.startsWith(q) && q.length>=2) s=2.6;
+    else if(num) s=0;
+    else if(qs.length>=2 && ts===qs){ s=2.5; fz=true; }
+    else if(q.length>=3 && t.includes(q)) s=1.9;
+    else if(q.length>=4){
+      const max=q.length>=8?2:1, d=osa(qs,ts,max);
+      if(d<=max){ s=2.1-0.45*d; fz=true; }
+      else if(ts.length>qs.length && osa(qs,ts.slice(0,qs.length),1)<=1){ s=1.4; fz=true; }
+    }
+    if(s>best){ best=s; via=fz?t:null; if(s===3) break; }
+  }
+  return {s:best,via};
+}
+function parseQuery(q){ return norm(q).split(' ').filter(w=>w && !STOP.has(w)); }
+function searchFiles(list,q){
+  const terms=parseQuery(q); if(!terms.length) return {list,notes:[]};
+  const fuzzy=new Map(); const scored=[];
+  for(const f of list){
+    const toks=S.index.get(f.id)||[]; let total=0, hit=0;
+    for(const w of terms){
+      let r=tokScore(w,toks);
+      for(const syn of (SYN[w]||SYN[squash(w)]||[])){ const r2=tokScore(syn,toks); if(r2.s*0.95>r.s) r={s:r2.s*0.95,via:r2.via||(syn!==w?syn:null)}; }
+      if(r.s>0){ hit++; total+=r.s; if(r.via && r.via!==w) fuzzy.set(w,r.via); }
+    }
+    scored.push({f,total,hit});
+  }
+  let res=scored.filter(x=>x.hit===terms.length), partial=false;
+  if(!res.length && terms.length>1){ res=scored.filter(x=>x.hit>=Math.ceil(terms.length/2)); partial=!!res.length; }
+  res.sort((a,b)=>b.hit-a.hit||b.total-a.total);
+  return {list:res.map(x=>x.f),notes:[...fuzzy].slice(0,3).map(([a,b])=>`${a} → ${b}`),partial,scored:true};
+}
+
+/* ---------- filtering ---------- */
+function snoozed(f){ return !!f.snoozeUntil && daysTo(f.snoozeUntil)>0; }
+function isAlert(f){ return !f.alertDone && !snoozed(f) && [f.expiry,f.due].some(d=>{ const n=daysTo(d); return n!==null && n<=REMIND_DAYS; }); }
+function thisMonth(f){ return (f.date||'').slice(0,7)===todayISO().slice(0,7); }
+function inScope(f){ return S.master==='all' || mOf(f)===S.master; }
+function inView(f){
+  if(S.view==='trash') return !!f.trashedAt;
+  if(f.trashedAt) return false;
+  if(S.view==='all') return true;
+  if(S.view==='star') return !!f.star;
+  if(S.view==='alert') return isAlert(f);
+  if(S.view==='undated') return !f.date;
+  if(S.view==='review') return !!f.needsReview;
+  if(S.view==='month') return thisMonth(f);
+  return f.folder===S.view;
+}
+function visible(){
+  let list=S.files.filter(f=>inScope(f)&&inView(f));
+  const byYear=l=>S.year==='all'?l:l.filter(f=>(f.date||'').slice(0,4)===S.year);
+  const SORTS={date_desc:(a,b)=>(b.date||'').localeCompare(a.date||'')||(b.uploadedAt||'').localeCompare(a.uploadedAt||''),
+    date_asc:(a,b)=>(a.date||'9999').localeCompare(b.date||'9999'),up_desc:(a,b)=>(b.uploadedAt||'').localeCompare(a.uploadedAt||''),
+    name:(a,b)=>(a.name||'').localeCompare(b.name||'')};
+  if(S.ai && S.ai.q===S.q){ const order=new Map(S.ai.ids.map((id,i)=>[id,i])); let l=byYear(list.filter(f=>order.has(f.id)));
+    l=S.qSort!=='relevance'&&SORTS[S.qSort]?l.sort(SORTS[S.qSort]):l.sort((a,b)=>order.get(a.id)-order.get(b.id)); return {list:l,notes:[],ai:true}; }
+  let notes=[], partial=false, scored=false;
+  if(S.q){ const r=searchFiles(list,S.q); list=r.list; notes=r.notes; partial=r.partial; scored=true; }
+  list=byYear(list);
+  if(!scored) list.sort(SORTS[S.sort]); else if(S.qSort!=='relevance'&&SORTS[S.qSort]) list.sort(SORTS[S.qSort]);
+  return {list,notes,partial,scored};
+}
+function viewLabel(){
+  const m=S.master==='all'?'':masterOf(S.master).name;
+  const v={all:'All files',star:'Starred',alert:'Expiry & due',review:'To review',month:'This month',undated:'Undated',trash:'Recycle bin'}[S.view]||catOf(S.view).name;
+  return {m,v};
+}
+
+/* ---------- render ---------- */
+function renderRecent(){
+  const show=S.view==='all'&&!S.q&&S.master==='all'&&live().length>4;
+  $('#recent').hidden=!show; if(!show) return;
+  const L=live().slice().sort((a,b)=>(b.uploadedAt||'').localeCompare(a.uploadedAt||'')).slice(0,4);
+  $('#recentList').innerHTML=L.map(f=>`<button class="rrow" data-open="${f.id}"><span class="rt">${f.thumb?`<img data-blob="${esc(f.thumb)}" alt="">`:f.type?.startsWith('image/')?`<img data-blob="${esc(f.asset)}" alt="">`:esc((f.ext||'').toUpperCase())}</span>
+    <span class="rn"><b>${esc(f.name)}</b><span>${esc(catOf(f.folder).name)} · ${f.date?fmtDate(f.date):'No date'}</span></span>${alertPill(f)}</button>`).join('');
+  hydrate($('#recentList'));
+}
+function setNav(k){ document.querySelectorAll('#bnav [data-nav]').forEach(b=>b.classList.toggle('on',b.dataset.nav===k)); }
+function render(){ renderSide(); renderStats(); renderReminders(); renderRecent(); renderGrid(); renderQueue(); renderUpMaster();
+  if(P.engine){ $('#aiTog').hidden=true; $('#aiNote').hidden=false;
+    $('#aiNoteText').textContent=P.engine()==='claude'&&S.sample?'Read by Claude AI with your API key, so each file\'s image or text is sent to Anthropic. Change this in Settings.':'Read on this device, free and offline. Text in photos and scans is read in English and Hindi. Check files marked "Check".'; }
+  else { $('#aiTog').hidden=$('#aiNote').hidden=!S.sample; $('#useAI').checked=!!S.useAI; }
+  const n=live().length; $('#zipAll').disabled=!n||!S.dl; $('#shareAll').disabled=!n||!S.dl; }
+function foldBtn(attr,id,name,n,color,on,mono){
+  return `<button class="fold${on?' on':''}${n===0?' empty':''}" data-${attr}="${esc(id)}">${mono?`<span class="ic" style="background:${color}">${esc(mono)}</span>`:color?`<span class="dot" style="background:${color}"></span>`:''}<span>${esc(name)}</span><span class="n">${n}</span></button>`;
+}
+function renderSide(){
+  const L=live();
+  $('#mrail').innerHTML=foldBtn('master','all','All masters',L.length,'linear-gradient(145deg,#E9C06D,#B98425)',S.master==='all','★')
+    + masters().map(m=>foldBtn('master',m.id,m.name,L.filter(f=>mOf(f)===m.id).length,dotColor(m.h),S.master===m.id,(m.name.trim()[0]||'?').toUpperCase())).join('');
+  const sc=S.files.filter(inScope), sl=sc.filter(f=>!f.trashedAt);
+  $('#lrail').innerHTML=foldBtn('view','all','All files',sl.length,null,S.view==='all')+foldBtn('view','star','Starred',sl.filter(f=>f.star).length,null,S.view==='star')
+    +foldBtn('view','alert','Expiry & due',sl.filter(isAlert).length,null,S.view==='alert')+foldBtn('view','review','To review',sl.filter(f=>f.needsReview).length,null,S.view==='review')+foldBtn('view','month','This month',sl.filter(thisMonth).length,null,S.view==='month')+foldBtn('view','undated','Undated',sl.filter(f=>!f.date).length,null,S.view==='undated')
+    +foldBtn('view','trash','Recycle bin',sc.filter(f=>f.trashedAt).length,null,S.view==='trash');
+  const cats=allFolders().map(c=>({...c,n:sl.filter(f=>f.folder===c.id).length})).sort((a,b)=>(b.n>0)-(a.n>0));
+  $('#rail').innerHTML=cats.map(c=>foldBtn('view',c.id,c.name,c.n,dotColor(c.h),S.view===c.id)).join('');
+  renderMeter();
+}
+function renderMeter(){
+  if(!S.usage){ $('#meter').innerHTML=''; return; } const u=S.usage, p=u.maxBytes?Math.min(100,u.bytes/u.maxBytes*100):0;
+  $('#meter').innerHTML=`<div class="meter">Storage: ${fmtSize(u.bytes)}${u.maxBytes?' of '+fmtSize(u.maxBytes):''} · ${plural(S.files.length,'document')}<div class="bar"><i style="width:${p.toFixed(1)}%"></i></div></div>`;
+}
+function renderStats(){
+  const L=live();
+  $('#stats').innerHTML=`<div class="stat"><b>${L.length}</b><span>Files</span></div><div class="stat"><b>${masters().length}</b><span>Master folders</span></div>
+    <div class="stat${L.some(isAlert)?' alert':''}"><b>${L.filter(isAlert).length}</b><span>Expiry & due</span></div>`;
+}
+function renderUpMaster(){
+  $('#upMaster').innerHTML=masters().map(m=>`<option value="${esc(m.id)}"${m.id===S.upMaster?' selected':''}>${esc(m.name)}</option>`).join('')+`<option value="__new">+ New master folder…</option>`;
+}
+function renderReminders(){
+  const items=[];
+  live().filter(inScope).filter(f=>!f.alertDone&&!snoozed(f)).forEach(f=>[['expiry','Expires'],['due','Due']].forEach(([k,label])=>{ const n=daysTo(f[k]); if(n!==null&&n<=REMIND_DAYS) items.push({f,n,label,date:f[k]}); }));
+  items.sort((a,b)=>a.n-b.n);
+  $('#remind').hidden=!items.length;
+  $('#rlist').innerHTML=items.map(({f,n,label,date})=>`<button class="rcard ${n<0?'late':'soon'}" data-open="${f.id}">
+     <span class="kind">${label} · ${fmtDate(date)}</span><span class="when">${n<0?(label==='Expires'?'Expired '+plural(Math.abs(n),'day')+' ago':plural(Math.abs(n),'day')+' overdue'):n===0?'Today':plural(n,'day')+' left'}</span>
+     <span class="what">${esc(f.title||f.name)} · ${esc(masterOf(f.master).name)}</span></button>`).join('');
+}
+function alertPill(f){
+  if(f.alertDone) return ''; const ds=[f.expiry,f.due].map(daysTo).filter(n=>n!==null); if(!ds.length) return '';
+  const e=daysTo(f.expiry), d=daysTo(f.due);
+  if(e!==null&&e<0) return `<span class="pill late">Expired</span>`;
+  if(d!==null&&d<0) return `<span class="pill late">Overdue</span>`;
+  const n=Math.min(...ds); if(n<=REMIND_DAYS) return `<span class="pill soon">${n===0?'Today':n+' days'}</span>`; return '';
+}
+function thumbHTML(f){
+  if(f.thumb) return `<img data-blob="${esc(f.thumb)}" alt="" loading="lazy">`;
+  if(f.type?.startsWith('image/')) return `<img data-blob="${esc(f.asset)}" alt="" loading="lazy">`;
+  return `<span class="ext">${esc((f.ext||'file').toUpperCase())}</span>`;
+}
+function renderGrid(){
+  const {list,notes,partial,ai}=visible(); const {m,v}=viewLabel();
+  const shown=new Set(list.map(f=>f.id)); for(const id of [...S.sel]) if(!shown.has(id)) S.sel.delete(id);
+  const sortSel=$('#sort'); sortSel.querySelector('[value="relevance"]').hidden=!S.q; sortSel.value=S.q?S.qSort:S.sort;
+  $('#viewTitle').innerHTML=(m?`<span class="crumb">${esc(m)} ›</span> `:'')+esc(v);
+  $('#viewCount').textContent=S.ready?plural(list.length,'file'):'';
+  const can=list.length&&S.dl&&S.view!=='trash'; $('#zipView').disabled=!can; $('#shareView').disabled=!can;
+  const sn=$('#snote');
+  if(S.aiBusy) sn.innerHTML='Searching your files with AI…';
+  else if(ai) sn.innerHTML=`<b>AI results</b> for "${esc(S.q)}"${S.ai.note?': '+esc(S.ai.note):''} · <button id="aiClear">Back to normal search</button>`;
+  else if(S.q && notes.length) sn.innerHTML=`Also matched similar spellings: <b>${notes.map(esc).join(', ')}</b>${partial?'. Not every word matched, so close results are shown.':''}`;
+  else if(S.q && partial) sn.innerHTML='Not every word matched, so close results are shown.';
+  else if(S.q && !list.length) sn.innerHTML=S.sample?'No matches. Press <b>Ask AI</b> to search by meaning.':'No matches. Try a different word.';
+  else if(S.q) sn.textContent=`${list.length} ${list.length===1?'match':'matches'}${S.qSort==='relevance'?', best match first':''}.`;
+  else sn.textContent=DEFAULT_NOTE;
+  $('#aiSearch').hidden=!(S.sample && S.q && S.q.length>=2);
+  const pool=S.files.filter(f=>inScope(f)&&inView(f));
+  const yrs=[...new Set(pool.map(f=>(f.date||'').slice(0,4)).filter(Boolean))].sort().reverse();
+  if(S.year!=='all'&&!yrs.includes(S.year)) S.year='all';
+  $('#years').innerHTML=yrs.length>1?[`<button class="chip${S.year==='all'?' on':''}" data-year="all">All years</button>`,...yrs.map(y=>`<button class="chip${S.year===y?' on':''}" data-year="${y}">${y} · ${pool.filter(f=>f.date?.startsWith(y)).length}</button>`)].join(''):'';
+  $('#bulk').hidden=!S.sel.size; $('#bulkN').textContent=`${S.sel.size} selected`;
+  $('#bulkPdf').hidden=!S.files.some(x=>S.sel.has(x.id)&&x.type?.startsWith('image/'))||S.view==='trash';
+  $('#bulkMaster').innerHTML=`<option value="">Move to master…</option>`+masters().map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+  $('#bulkMove').innerHTML=`<option value="">Move to sub-folder…</option>`+allFolders().map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  $('#bulkTrash').textContent=S.view==='trash'?'Restore':'Move to bin';
+  $('#grid').innerHTML=list.map(f=>{ const c=catOf(f.folder), mm=masterOf(f.master), on=S.sel.has(f.id);
+    return `<article class="card${on?' sel':''}">
+      <button class="pick${on?' on':''}" data-pick="${f.id}" aria-label="Select" aria-pressed="${on}">${on?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg>':''}</button>
+      <button class="star${f.star?' on':''}" data-star="${f.id}" aria-label="Star" aria-pressed="${!!f.star}"><svg width="16" height="16" viewBox="0 0 24 24" fill="${f.star?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></button>
+      <button class="open" data-open="${f.id}">
+        <div class="thumb">${thumbHTML(f)}<span class="mtag"><i style="background:${dotColor(mm.h)}"></i>${esc(mm.name)}</span></div>
+        <div class="body">
+          <div class="fname">${esc(f.name)}</div>
+          <div class="meta"><span class="tag"><i style="background:${dotColor(c.h)}"></i>${esc(c.name)}</span>${alertPill(f)}${f.needsReview&&!f.trashedAt?'<span class="pill fz" title="Read on this device. Check the name, folder and date">Check</span>':''}${P.fileBadge?P.fileBadge(f):''}</div>
+          <div class="meta">${f.trashedAt?'Moved to bin '+fmtDate(f.trashedAt.slice(0,10)):(f.date?fmtDate(f.date):'No date found')+(f.amount?' · '+esc(f.amount):'')}</div>
+        </div>
+      </button></article>`; }).join('');
+  hydrate($('#grid'));
+  let e='';
+  if(!S.files.length){
+    e=`<div class="empty-state"><svg width="96" height="96" viewBox="0 0 96 96" fill="none" aria-hidden="true"><rect x="10" y="22" width="76" height="58" rx="12" fill="var(--indigo-soft)"/><path d="M10 34a12 12 0 0 1 12-12h16l7 7h29a12 12 0 0 1 12 12" stroke="var(--indigo)" stroke-width="3"/><rect x="26" y="42" width="44" height="5" rx="2.5" fill="var(--indigo)"/><rect x="26" y="54" width="28" height="5" rx="2.5" fill="var(--gold)"/></svg>
+      <div><h2>${S.ready?'Your vault is empty':'Loading your files…'}</h2>
+      <p>Pick a master folder in the upload tray (for example "Dad's Documents"), then drop a file. FileSaathi reads it and chooses the name and sub-folder for you:</p>
+      <div class="eg"><span>IMG_20261002_184512.jpg</span><b>→ Personal / Bills &amp; Utilities / 2026-10-02_Electricity-Bill_JVVNL.jpg</b>
+      <span>scan0031.pdf</span><b>→ Dad's Documents / Insurance / 2025-03-11_Health-Policy_Star-Health.pdf</b></div></div></div>`;
+  } else if(!list.length){
+    e=`<div class="empty-state" style="grid-template-columns:minmax(0,1fr)"><div><h2>${S.view==='trash'?'The recycle bin is empty':'No files here'}</h2><p>${S.view==='trash'?'Deleted files come here first, so anything removed by mistake can be restored.':'Try another search word, year or master folder.'}</p></div></div>`;
+  } else if(S.view==='trash'){
+    e=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--muted);font-size:.88rem">Files in the bin are left out of search, sharing and downloads.</span>${S.confirmEmpty?`<span class="confirm" style="width:auto">The ${plural(list.length,'file')} shown here will be deleted for good${S.q||S.year!=='all'?' (only these, because a search or year filter is on)':''}. <button class="btn sm danger" id="emptyYes">Delete ${list.length}</button><button class="btn sm" id="emptyNo">Cancel</button></span>`:`<button class="btn sm danger" id="emptyBin">${S.q||S.year!=='all'?`Delete these ${list.length} for good`:'Empty bin'}</button>`}</div>`;
+  }
+  $('#empty').innerHTML=e;
+}
+function renderQueue(){
+  const q=$('#queue'); q.hidden=!S.queue.length;
+  q.innerHTML=S.queue.map((it,i)=>`<div class="qi ${it.state}">${it.state==='work'?'<span class="spin"></span>':''}<span class="nm">${esc(it.final||it.file.name)}</span><span class="st">${esc(it.msg)}</span>${it.state==='err'&&it.retry?`<button class="btn sm" data-retry="${i}">Retry</button>`:''}</div>`).join('')
+    +(S.queue.some(i=>i.state==='done'||i.state==='err')&&!S.busy?`<button class="btn sm ghost" id="clearQ" style="align-self:flex-start">Clear list</button>`:'');
+}
+
+/* ---------- panels ---------- */
+function showPanel(kind){ if(!S.panel) S.lastFocus=document.activeElement; S.panel=kind; $('#drawer').hidden=false; $('#scrim').hidden=false;
+  setTimeout(()=>{ const c=$('#drawer #pClose'); if(c && !$('#drawer').contains(document.activeElement)) c.focus(); },0); }
+function closePanel(){ if(S.viewer){ try{ S.viewer.destroy(); }catch{} S.viewer=null; }
+  S.panel=null; S.open=null; S.share=null; S.dirty=false; $('#drawer').hidden=true; $('#scrim').hidden=true;
+  const lf=S.lastFocus; S.lastFocus=null; if(lf && document.contains(lf)) try{ lf.focus(); }catch{} }
+function requestClose(){
+  if(S.panel==='file' && S.dirty){ const g=$('#dGuard'); if(g){ g.hidden=false; g.querySelector('button')?.focus(); return; } }
+  closePanel();
+}
+function openFile(id){ S.open=id; S.confirmDel=false; S.dirty=false; showPanel('file'); renderFile(); }
+function head(title){ return `<div class="dhead"><h2>${esc(title)}</h2><button class="btn sm ghost" id="pClose" aria-label="Close">✕</button></div>`; }
+function renderFile(){
+  const f=S.files.find(x=>x.id===S.open); if(!f){ closePanel(); return; }
+  const pid=f.type?.startsWith('image/')?f.asset:f.thumb;
+  const isText=/^(text\/|application\/json)/.test(f.type||'')||f.ext==='docx', isSheet=f.ext==='xlsx', isOldOffice=f.ext==='doc'||f.ext==='xls';
+  const prev=isText?`<pre id="txtPrev" style="margin:0;padding:12px 14px;width:100%;max-height:340px;overflow:auto;font-family:var(--f-mono);font-size:.78rem;white-space:pre-wrap;word-break:break-word;text-align:left">Loading…</pre>`
+    :isSheet?`<div id="xlsPrev" style="width:100%;max-height:340px;overflow:auto;align-self:stretch;font-size:.8rem">Loading…</div>`
+    :isOldOffice?`<p style="margin:0;padding:24px;color:var(--muted);text-align:center">Preview is not available for old .${esc(f.ext)} files. Download it to open in Word or Excel.</p>`
+    :pid?`<img data-blob="${esc(pid)}" alt="${esc(f.title||f.name)}">`:`<span style="font-family:var(--f-mono);color:var(--muted)">${esc((f.ext||'').toUpperCase())}</span>`;
+  const copts=allFolders().map(c=>`<option value="${esc(c.id)}"${c.id===f.folder?' selected':''}>${esc(c.name)}</option>`).join('');
+  const mopts=masters().map(m=>`<option value="${esc(m.id)}"${m.id===mOf(f)?' selected':''}>${esc(m.name)}</option>`).join('');
+  $('#drawer').innerHTML=head(f.title||f.name)+`
+  <div class="dbody">
+    <div class="confirm" id="dChanged" hidden style="width:auto;background:var(--gold-soft);color:var(--gold-ink)">This file was changed somewhere else while you were editing. Save to keep your edits, or <button class="btn sm" id="dReload">show the latest</button></div>
+    <div class="preview">${prev}</div>
+    ${f.type==='application/pdf'?`<button class="btn sm" id="dViewer" style="align-self:flex-start">View all ${f.pages?f.pages+' ':''}pages</button>`:''}
+    ${f.summary?`<div class="summary"><b>What this is</b>${esc(f.summary)}</div>`:''}
+    <form class="fields" id="dForm">
+      <label class="full">File name<input class="mono" id="fName" value="${esc(f.name)}" maxlength="160"></label>
+      <label>Master folder<select id="fMaster">${mopts}</select></label>
+      <label>Sub-folder<select id="fFolder">${copts}</select></label>
+      <label>Document date<input type="date" id="fDate" value="${esc(f.date||'')}"></label>
+      <label>Expiry date<input type="date" id="fExpiry" value="${esc(f.expiry||'')}"></label>
+      <label>Due date<input type="date" id="fDue" value="${esc(f.due||'')}"></label>
+      <label>Issued by<input id="fIssuer" value="${esc(f.issuer||'')}" maxlength="80"></label>
+      <label class="full">Title<input id="fTitle" value="${esc(f.title||'')}" maxlength="80"></label>
+      <label class="full">Tags (comma separated)<input id="fTags" value="${esc((f.tags||[]).join(', '))}"></label>
+      <label class="full">Notes<textarea id="fNotes" rows="2" maxlength="600">${esc(f.notes||'')}</textarea></label>
+    </form>
+    <dl class="facts">
+      <dt>Original name</dt><dd style="font-family:var(--f-mono);font-size:.8rem">${esc(f.original)}</dd>
+      ${f.person?`<dt>Belongs to</dt><dd>${esc(f.person)}</dd>`:''}${f.amount?`<dt>Amount</dt><dd>${esc(f.amount)}</dd>`:''}
+      <dt>Size</dt><dd>${fmtSize(f.size||0)}${f.pages?' · '+plural(f.pages,'page'):''}</dd>
+      ${f.pages&&f.textPages?`<dt>Searchable</dt><dd>${f.textPages>=f.pages?'All pages':`First ${f.textPages} of ${f.pages} pages`}${f.text&&f.text.length>=8000?' (first 8,000 characters)':''}</dd>`:''}
+      <dt>Added</dt><dd>${esc(fmtDate((f.uploadedAt||'').slice(0,10)))}</dd>
+      <dt>Read by</dt><dd>${f.reader==='claude'?'Claude AI':f.reader==='offline'?'This device'+(f.ocr?' (with text scan)':''):'—'}</dd>
+      <dt>Date source</dt><dd>${{ai:'Read from the document',text:'Found in the text',file:'File modified date (estimate)',manual:'Entered by you'}[f.dateSource]||'—'}</dd>
+    </dl>
+    ${[['expiry','expiry'],['due','due date']].filter(([k])=>f[k]).map(([k,l])=>`<a class="btn sm" href="${esc(calLink(f,k))}" target="_blank" rel="noopener" style="align-self:flex-start">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      Add ${l} (${fmtDate(f[k])}) to Google Calendar</a>`).join('')}
+    ${f.needsReview&&!f.trashedAt?`<div class="confirm" style="width:auto;background:var(--indigo-soft);color:var(--ink)">Read on this device. Check the name, folder and dates, then <button class="btn sm primary" id="dOk">Looks right</button></div>`:''}
+    ${(f.expiry||f.due)&&!f.trashedAt?`<div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn sm" id="dAlert">${f.alertDone?'Show reminder again':f.due&&!f.expiry?'Mark as paid':f.expiry&&!f.due?'Mark as renewed':'Mark as done'}</button>
+      ${!f.alertDone?`<button class="btn sm" id="dSnooze">${snoozed(f)?'Snoozed till '+fmtDate(f.snoozeUntil)+' · undo':'Snooze 1 week'}</button>`:''}</div>`:''}
+    ${S.confirmDel?`<div class="confirm">This file will be deleted for good and cannot be restored. <button class="btn sm danger" id="dDelYes">Delete</button><button class="btn sm" id="dDelNo">Cancel</button></div>`:''}
+  </div>
+  <div class="confirm" id="dGuard" hidden style="margin:0 20px 10px;width:auto">You have unsaved changes. <button class="btn sm primary" id="gdSave">Save and close</button><button class="btn sm danger" id="gdDiscard">Discard</button><button class="btn sm" id="gdKeep">Keep editing</button></div>
+  <div class="dfoot">
+    ${f.trashedAt?`<button class="btn primary" id="dRestore">Restore</button><button class="btn danger sp" id="dDel">Delete for good</button>`:
+    `<button class="btn primary" id="dSave">Save</button><button class="btn" id="dShare"${S.dl?'':' disabled'}>Share</button><button class="btn" id="dDl"${S.dl?'':' disabled'}>Download</button>
+     <button class="btn" id="dRe">Read again</button><button class="btn danger sp" id="dTrash">Move to bin</button>`}
+  </div>`;
+  hydrate($('#drawer'));
+  if(isSheet){ const id=f.id; P.getBlob(f.asset).then(b=>b.arrayBuffer()).then(buf=>officeRead(buf,'xlsx')).then(o=>{ const el=$('#xlsPrev'); if(!el||S.open!==id) return;
+      const rows=(o.table||[]).filter(r=>r.some(v=>v!=='')); const cols=Math.min(12,Math.max(1,...rows.map(r=>r.length)));
+      el.innerHTML=rows.length?`<table style="border-collapse:collapse;min-width:100%;font-variant-numeric:tabular-nums">${rows.map((r,i)=>`<tr>${Array.from({length:cols},(_,j)=>`<${i?'td':'th'} style="border:1px solid var(--line);padding:4px 8px;text-align:left;white-space:nowrap;background:${i?'var(--surface)':'var(--sunk)'}">${esc(r[j]??'')}</${i?'td':'th'}>`).join('')}</tr>`).join('')}</table>`:'<p style="padding:12px;margin:0">This sheet looks empty.</p>'; })
+      .catch(()=>{ const el=$('#xlsPrev'); if(el) el.textContent='This file could not be loaded for preview.'; }); }
+  if(isText && f.ext==='docx'){ const id=f.id; P.getBlob(f.asset).then(b=>b.arrayBuffer()).then(buf=>officeRead(buf,'docx')).then(o=>{ const el=$('#txtPrev'); if(el&&S.open===id) el.textContent=o.text||'This document has no text.'; })
+      .catch(()=>{ const el=$('#txtPrev'); if(el) el.textContent='This file could not be loaded for preview.'; }); }
+  else if(isText){ const id=f.id; P.getBlob(f.asset).then(b=>b.slice(0,40000).text()).then(t=>{ const el=$('#txtPrev'); if(!el||S.open!==id) return;
+      if(f.type==='application/json'){ try{ t=JSON.stringify(JSON.parse(t),null,2); }catch{} } el.textContent=t+(f.size>40000?'\n\n… (showing the first 40 KB)':''); })
+    .catch(()=>{ const el=$('#txtPrev'); if(el) el.textContent='This file could not be loaded for preview.'; }); }
+}
+async function openViewer(f){
+  const L=pdfLib(); if(!L){ toast('The PDF viewer is not available'); return; }
+  showPanel('viewer');
+  $('#drawer').innerHTML=head(f.title||f.name)+`<div class="dbody" id="pdfPages" style="gap:12px;background:var(--sunk)"><p style="margin:0;color:var(--muted)">Opening…</p></div>
+    <div class="dfoot"><button class="btn" id="vBack">Back to details</button>
+      <button class="btn sm" id="vZoomOut" aria-label="Zoom out">−</button><span id="vZoomLbl" style="align-self:center;font-size:.85rem;min-width:3.2em;text-align:center">100%</span><button class="btn sm" id="vZoomIn" aria-label="Zoom in">+</button>
+      <span id="vInfo" style="margin-left:auto;align-self:center;color:var(--muted);font-size:.85rem"></span></div>`; S.vZoom=1;
+  $('#pdfPages').style.overflow='auto';
+  try{
+    const buf=await (await P.getBlob(f.asset)).arrayBuffer();
+    const doc=await L.getDocument({data:new Uint8Array(buf),isEvalSupported:false}).promise; S.viewer=doc; S.viewerFile=f.id; S.viewerNext=1;
+    $('#pdfPages').innerHTML=''; await renderViewerPages(10);
+  }catch{ const el=$('#pdfPages'); if(el) el.innerHTML='<p style="margin:0">This PDF could not be opened.</p>'; }
+}
+async function renderViewerPages(count){
+  const doc=S.viewer, box=$('#pdfPages'); if(!doc||!box) return;
+  $('#vMore')?.remove();
+  const w=Math.max(280,box.clientWidth-40), dpr=Math.min(2,window.devicePixelRatio||1);
+  const end=Math.min(doc.numPages,S.viewerNext+count-1);
+  for(let i=S.viewerNext;i<=end;i++){
+    if(S.viewer!==doc) return;
+    const pg=await doc.getPage(i); const vp1=pg.getViewport({scale:1}); const vp=pg.getViewport({scale:w/vp1.width*dpr*1.5});
+    const c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height; c.style.cssText=`width:${(S.vZoom||1)*100}%;max-width:none;height:auto;background:#fff;border-radius:6px;box-shadow:var(--shadow);flex:none`;
+    c.setAttribute('aria-label','Page '+i); box.appendChild(c);
+    await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise; pg.cleanup();
+    const info=$('#vInfo'); if(info) info.textContent=`Page ${i} of ${doc.numPages}`;
+  }
+  S.viewerNext=end+1;
+  if(end<doc.numPages){ const b=document.createElement('button'); b.className='btn'; b.id='vMore'; b.textContent=`Show next pages (${doc.numPages-end} left)`; b.style.alignSelf='center'; box.appendChild(b); }
+}
+function calLink(f,kind){
+  const d=f[kind], start=d.replace(/-/g,''), end=isoOf(new Date(new Date(d+'T00:00:00').getTime()+864e5)).replace(/-/g,'');
+  return 'https://calendar.google.com/calendar/render?'+new URLSearchParams({action:'TEMPLATE',
+    text:`${kind==='expiry'?'Expires':'Due'}: ${f.title||f.name}`, dates:start+'/'+end,
+    details:`${f.name}\n${masterOf(f.master).name} / ${catOf(f.folder).name}\nReminder added from FileSaathi.`}).toString();
+}
+async function saveFile(){
+  const f=S.files.find(x=>x.id===S.open); if(!f) return;
+  let name=$('#fName').value.trim().replace(/[\\/:*?"<>|]+/g,'-');
+  if(!name){ toast('The file name cannot be empty'); return; }
+  const same=e=>e===f.ext||(['jpg','jpeg'].includes(e)&&['jpg','jpeg'].includes(f.ext));
+  const m=name.match(/\.([a-z0-9]{2,5})$/i); let extFixed=false;
+  if(m && !same(m[1].toLowerCase())){ name=name.slice(0,-m[0].length); extFixed=true; }
+  if(!m || extFixed) name+='.'+f.ext;
+  if(name.replace(/\.[^.]+$/,'').trim()===''){ toast('The file name cannot be empty'); return; }
+  const folder=$('#fFolder').value, master=$('#fMaster').value, date=validISO($('#fDate').value);
+  const patch={name:uniqueName(name,folder,f.id),folder,master,date,expiry:validISO($('#fExpiry').value),due:validISO($('#fDue').value),
+    title:$('#fTitle').value.trim(),issuer:$('#fIssuer').value.trim(),notes:$('#fNotes').value.trim(),
+    tags:$('#fTags').value.split(',').map(s=>s.trim()).filter(Boolean).slice(0,12)};
+  if(date!==f.date) patch.dateSource=date?'manual':null;
+  if(patch.expiry!==f.expiry||patch.due!==f.due){ patch.alertDone=false; patch.snoozeUntil=null; }
+  patch.needsReview=false;
+  try{ await S.col.doc(f.id).update(patch); S.dirty=false; toast(extFixed?`Saved. The ending was kept as .${f.ext} so the file still opens.`:'Saved',extFixed?5000:3200); return true; }
+  catch(e){ toast('Could not save ('+(e?.code||'error')+')'); return false; }
+}
+async function hardDelete(f){
+  await S.col.doc(f.id).delete();
+  if(S.assets){ try{ await S.assets.delete(f.asset); }catch{} if(f.thumb) try{ await S.assets.delete(f.thumb); }catch{} }
+}
+
+/* manage */
+function renderManage(){
+  const L=S.files;
+  const mrow=m=>{ const n=L.filter(f=>mOf(f)===m.id).length;
+    return `<div class="mitem"><span style="width:12px;height:12px;border-radius:4px;background:${dotColor(m.h)}"></span>
+      <input value="${esc(m.name)}" data-mname="${esc(m.id)}" maxlength="40" aria-label="Master folder name"><span class="n">${plural(n,'file')}</span>
+      <button class="btn sm" data-msave="${esc(m.id)}">Rename</button>${m.id==='general'?'':S.confirmM===m.id?`<span class="confirm">Its ${plural(n,'file')} will move to "${esc(masterOf('general').name)}". <button class="btn sm danger" data-mdelyes="${esc(m.id)}">Remove</button><button class="btn sm" data-mdelno="1">Cancel</button></span>`:`<button class="btn sm danger" data-mdel="${esc(m.id)}">Remove</button>`}</div>`; };
+  const frow=c=>{ const n=L.filter(f=>f.folder===c.id).length;
+    return `<div class="mitem"><span style="width:12px;height:12px;border-radius:4px;background:${dotColor(c.h)}"></span>
+      <input value="${esc(c.name)}" data-fname="${esc(c.id)}" maxlength="40" aria-label="Sub-folder name"><span class="n">${plural(n,'file')}</span>
+      <button class="btn sm" data-fsave="${esc(c.id)}">Rename</button>${S.confirmF===c.id?`<span class="confirm">Its ${plural(n,'file')} will move to "Others". <button class="btn sm danger" data-fdelyes="${esc(c.id)}">Remove</button><button class="btn sm" data-mdelno="1">Cancel</button></span>`:`<button class="btn sm danger" data-fdel="${esc(c.id)}">Remove</button>`}</div>`; };
+  const custom=allFolders().filter(c=>c.custom);
+  $('#drawer').innerHTML=head('Manage folders')+`
+  <div class="dbody">
+    <div class="sechead"><h2 style="font-size:1.05rem">Master folders</h2><span class="sub">Each master folder holds its own set of sub-folders</span></div>
+    <div class="mlist">${masters().map(mrow).join('')}</div>
+    <form class="newfold" id="newMaster2" style="margin:0;display:flex"><input id="newMasterName2" placeholder="New master folder, e.g. Dad's Documents" maxlength="40" aria-label="New master folder"><button class="btn sm primary" type="submit">Add</button></form>
+    <div class="sechead" style="margin-top:8px"><h2 style="font-size:1.05rem">Your sub-folders</h2><span class="sub">The 15 standard sub-folders are always available</span></div>
+    <div class="mlist">${custom.length?custom.map(frow).join(''):'<span style="color:var(--muted);font-size:.88rem">None yet. Add one from "New sub-folder" in the sidebar.</span>'}</div>
+  </div>`;
+}
+async function addMaster(name){
+  name=name.trim(); if(!name||!S.col) return null;
+  const ex=masters().find(m=>m.name.toLowerCase()===name.toLowerCase()); if(ex){ toast('That master folder already exists'); return ex.id; }
+  const id='m_'+(slug(name).toLowerCase().slice(0,20)||'x')+'_'+Date.now().toString(36).slice(-4);
+  try{ await saveSettings({masters:[...(S.settings.masters||[]),{id,name,h:Math.floor(Math.random()*360)}]}); toast('Master folder created: '+name); return id; }
+  catch{ toast('Could not create the master folder'); return null; }
+}
+
+/* settings */
+function renderSettings(){
+  const ai=P.aiSettings?P.aiSettings():null;
+  $('#drawer').innerHTML=head('Settings')+`
+  <div class="dbody">
+    ${P.syncSettings?`<div class="step"><span class="k">⟳</span><div class="c"><strong>Google Drive sync</strong>${P.syncSettings()}</div></div>`:''}
+    <div class="step"><span class="k">AI</span><div class="c"><strong>Document reading</strong>${ai?ai:`<p>Built in. Files are read by Claude when you add them; the first time, you are asked to allow it.</p>`}</div></div>
+    <div class="step"><span class="k">⇅</span><div class="c"><strong>Backup &amp; restore</strong>
+      <p>A backup is one ZIP with every file and its details (names, folders, dates, notes). Restore it here or in the other FileSaathi app to move your vault between devices.</p>
+      <p>${(()=>{ let b=null; try{ b=JSON.parse(localStorage.getItem('fs_last_backup')||'null'); }catch{} return b?`Last backup from this device: <b>${esc(fmtDate(b.at.slice(0,10)))}</b>, ${plural(b.files,'file')}${b.missing?`, <span style="color:var(--danger)">${b.missing} missing</span>`:''}.`:'No backup downloaded from this device yet.'; })()}</p>
+      <div class="row"><button class="btn gold" id="backupBtn"${S.dl&&S.files.length?'':' disabled'}>Download backup</button><button class="btn" id="restoreBtn"${S.assets?'':' disabled'}>Restore from backup</button></div></div></div>
+    ${P.installHelp?`<div class="step"><span class="k">↓</span><div class="c"><strong>Install on this device</strong>${P.installHelp()}</div></div>`:''}
+    <p style="margin:0;font-size:.82rem;color:var(--muted)">${esc(P.privacy)}</p>
+  </div>`;
+}
+
+/* share */
+function openShare(list,label,mode){
+  list=list.filter(f=>!f.trashedAt); if(!list.length) return;
+  S.share={list,label,mode,blob:null,fname:null,busy:false}; showPanel('share'); renderShare();
+}
+function shareText(){
+  const {list,label}=S.share; const size=list.reduce((a,f)=>a+(f.size||0),0);
+  const lines=list.slice(0,15).map(f=>'• '+f.name); if(list.length>15) lines.push(`…and ${list.length-15} more`);
+  return `${label} (${plural(list.length,'file')}, ${fmtSize(size)})\n${lines.join('\n')}\n\nThe ${list.length===1?'file is':'ZIP is'} attached to this message.`;
+}
+function shareLinks(msg,label){
+  const subj=`${label} - FileSaathi`;
+  return {wa:'https://wa.me/?text='+encodeURIComponent(msg),
+    gm:'https://mail.google.com/mail/?view=cm&fs=1&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(msg),
+    ol:'https://outlook.live.com/mail/0/deeplink/compose?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(msg)};
+}
+function renderShare(){
+  const sh=S.share; sh.msg=sh.msg??shareText(); const single=sh.list.length===1; const L=shareLinks(sh.msg,sh.label);
+  const direct=!!P.canShareFiles;
+  $('#drawer').innerHTML=head('Share: '+sh.label)+`
+  <div class="dbody">
+    <div class="flist">${sh.list.slice(0,40).map(f=>`<span>${esc(f.name)}</span>`).join('')}${sh.list.length>40?`<span>…and ${sh.list.length-40} more</span>`:''}</div>
+    <div class="step"><span class="k">1</span><div class="c"><strong>${direct?'Send directly':single?'Save or share the file':'Build the ZIP, then save or share it'}</strong>
+      <p>${direct?'Opens your device share menu with the '+(single?'file':'ZIP')+' attached. Pick WhatsApp, Gmail or any other app.':P.shareHelp}</p>
+      <div class="row"><button class="btn gold" id="shSave"${sh.busy?' disabled':''}>${sh.busy?'Preparing…':direct?'Share now':single?'Save / share file':'Build ZIP and save / share'}</button></div></div></div>
+    <div class="step"><span class="k">2</span><div class="c"><strong>${direct?'Or send a message and attach it yourself':'Send it with a message'}</strong>
+      <p>The message is filled in for you. Attach the saved ${single?'file':'ZIP'} in WhatsApp or your email.</p>
+      <textarea class="msgbox" id="shMsg" aria-label="Message">${esc(sh.msg)}</textarea>
+      <div class="row">
+        <a class="btn wa" id="lnkWa" href="${esc(L.wa)}" target="_blank" rel="noopener">Open WhatsApp</a>
+        <a class="btn" id="lnkGm" href="${esc(L.gm)}" target="_blank" rel="noopener">Gmail</a>
+        <a class="btn" id="lnkOl" href="${esc(L.ol)}" target="_blank" rel="noopener">Outlook</a>
+        <button class="btn" id="shCopy">Copy message</button>
+      </div></div></div>
+    <p style="margin:0;font-size:.82rem;color:var(--muted)">Files leave only from your device. FileSaathi never sends anything to anyone by itself.</p>
+  </div>`;
+}
+async function doShareSave(){
+  const sh=S.share; if(!sh||sh.busy) return;
+  if(!sh.blob){
+    sh.busy=true; renderShare();
+    try{
+      if(sh.list.length===1){ const f=sh.list[0]; sh.blob=await P.getBlob(f.asset); sh.fname=f.name; }
+      else { sh.blob=await buildZip(sh.list,sh.mode); sh.fname=`FileSaathi_${slug(sh.label)}_${todayISO()}.zip`; }
+    }catch{ toast('The file could not be prepared'); }
+    sh.busy=false; if(S.share!==sh) return; renderShare();
+  }
+  if(!sh.blob) return;
+  if(P.canShareFiles){
+    const file=new File([sh.blob],sh.fname,{type:sh.list.length===1?sh.list[0].type:'application/zip'});
+    const ok=await P.shareFiles([file],sh.msg,sh.label); if(ok!==false) return;
+  }
+  await saveBlob(sh.fname,sh.blob);
+}
+
+/* ---------- naming ---------- */
+function buildName(m,ext){
+  const parts=[m.date||todayISO(), slug(m.title)||'Document'];
+  const iss=slug(m.issuer); if(iss && !parts[1].toLowerCase().includes(iss.toLowerCase())) parts.push(iss);
+  const who=slug(m.person); if(who && m.category==='id') parts.push(who);
+  return parts.join('_').slice(0,120)+'.'+ext;
+}
+function reserveName(name,folder){ if(!S.pendingNames.has(folder)) S.pendingNames.set(folder,new Set()); S.pendingNames.get(folder).add(name.toLowerCase()); return name; }
+function uniqueName(name,folder,selfId){
+  const taken=new Set(S.files.filter(f=>f.folder===folder&&f.id!==selfId).map(f=>f.name.toLowerCase()));
+  const self=selfId&&S.files.find(f=>f.id===selfId); const own=self&&self.folder===folder?self.name.toLowerCase():null;
+  for(const x of (S.pendingNames.get(folder)||[])) if(x!==own) taken.add(x);
+  if(!taken.has(name.toLowerCase())) return name;
+  const i=name.lastIndexOf('.'); const base=i>0?name.slice(0,i):name, ext=i>0?name.slice(i):'';
+  for(let n=2;n<999;n++){ const c=`${base}_(${n})${ext}`; if(!taken.has(c.toLowerCase())) return c; }
+  return base+'_'+Date.now()+ext;
+}
+
+/* ---------- reading files ---------- */
+function typeOf(file){ const ext=(file.name.split('.').pop()||'').toLowerCase(); if(EXT2TYPE[ext]) return EXT2TYPE[ext]; if(ACCEPT[file.type]) return file.type; if(file.type==='image/jpg') return 'image/jpeg'; return null; }
+const isOfficeName=n=>/\.(docx?|xlsx?)$/i.test(n||'');
+async function toJpeg(src,max){
+  const bmp=src instanceof HTMLCanvasElement?src:await createImageBitmap(src);
+  const k=Math.min(1,max/Math.max(bmp.width,bmp.height)); const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(bmp.width*k)); c.height=Math.max(1,Math.round(bmp.height*k));
+  const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height); g.drawImage(bmp,0,0,c.width,c.height);
+  if(bmp.close) try{ bmp.close(); }catch{}
+  const out=await new Promise(r=>c.toBlob(r,'image/jpeg',0.86)); c.width=c.height=0; return out;
+}
+let pdfReady=false;
+function pdfLib(){ const L=window.pdfjsLib; if(!L) return null; if(!pdfReady){ L.GlobalWorkerOptions.workerSrc=P.pdfWorker||'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; pdfReady=true; } return L; }
+async function readPdf(buf,wantOcrPages){
+  const L=pdfLib(); if(!L) return {text:'',page:null,thumb:null,pages:null};
+  const doc=await L.getDocument({data:new Uint8Array(buf),isEvalSupported:false}).promise;
+  try{
+    let text='', textPages=0;
+    for(let i=1;i<=Math.min(doc.numPages,25)&&text.length<40000;i++){ const p=await doc.getPage(i); const tc=await p.getTextContent(); text+=tc.items.map(t=>t.str).join(' ')+'\n'; textPages=i; p.cleanup(); }
+    const p1=await doc.getPage(1); const vp=p1.getViewport({scale:1}); const v=p1.getViewport({scale:Math.min(2,1500/Math.max(vp.width,vp.height))});
+    const c=document.createElement('canvas'); c.width=v.width; c.height=v.height; const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height);
+    await p1.render({canvasContext:g,viewport:v}).promise; p1.cleanup();
+    const page=await toJpeg(c,1500), thumb=await toJpeg(c,480); c.width=c.height=0;
+    const ocrPages=[];
+    if(wantOcrPages && text.trim().length<40) for(let i=2;i<=Math.min(doc.numPages,4);i++){
+      const pg=await doc.getPage(i); const v1=pg.getViewport({scale:1}); const vv=pg.getViewport({scale:Math.min(2,1500/Math.max(v1.width,v1.height))});
+      const cc=document.createElement('canvas'); cc.width=vv.width; cc.height=vv.height; const gg=cc.getContext('2d'); gg.fillStyle='#fff'; gg.fillRect(0,0,cc.width,cc.height);
+      await pg.render({canvasContext:gg,viewport:vv}).promise; pg.cleanup(); ocrPages.push(await toJpeg(cc,1500)); cc.width=cc.height=0; }
+    return {text,textPages,page,thumb,pages:doc.numPages,ocrPages};
+  } finally { try{ await doc.destroy(); }catch{} }
+}
+async function sha(buf){ try{ const h=await crypto.subtle.digest('SHA-256',buf); return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join(''); }catch{ return null; } }
+
+/* ---------- AI ---------- */
+async function analyze({file,text,image,cats,master}){
+  if(!S.sample) return null;
+  S.rateHit=false; S.lastAIError=null;
+  const prompt=`You organise personal documents for a user in India. Today is ${todayISO()}.
+The user saved this file into their master folder "${master}" (it may hint whose documents these are).
+Original file name: "${file.name}" (type ${file.type||'unknown'}).
+${image?'An image of the document (or its first page) is attached.':''}
+${text?`Extracted text (may be partial):\n"""\n${text.slice(0,9000)}\n"""`:''}
+
+Pick the best sub-folder id from this list:
+${cats.map(c=>`${c.id} = ${c.name}`).join('\n')}
+Use "screenshots" only for phone or computer screenshots that are not a bill, receipt, ticket or ID. Use "photos" for ordinary photos.
+
+Return ONLY a JSON object:
+{"category": sub-folder id,
+ "title": short English title, 2-5 words, Title Case (e.g. "Electricity Bill", "Aadhaar Card", "Salary Slip Sept", "Flight Ticket DEL-JAI"),
+ "issuer": organisation or sender if visible (e.g. "JVVNL", "HDFC Bank", "UIDAI") or null,
+ "person": name of the person the document belongs to, or null,
+ "doc_date": the document's own date (bill, issue, transaction or screenshot date) as YYYY-MM-DD, or null. Indian documents write dates as DD/MM/YYYY.
+ "expiry_date": validity or expiry date as YYYY-MM-DD, or null,
+ "due_date": payment or action due date as YYYY-MM-DD, or null,
+ "amount": main amount with currency like "₹1,240", or null,
+ "summary": one short, plain English sentence saying what this document is,
+ "tags": up to 5 short lowercase tags,
+ "keywords": up to 12 lowercase words someone might type to find this later, in English plus common Hindi/Hinglish words (e.g. "bijli" for electricity, "dawai" for medicine, "gaadi" for vehicle), plus important visible words}
+Never invent dates or numbers that are not in the document. Do not include full ID numbers (Aadhaar, PAN, account numbers) anywhere.`;
+  const opts={}; if(image && S.imgOK) opts.images=[image];
+  if(!text && !opts.images) return null;
+  try{
+    const ctl=new AbortController(); opts.signal=ctl.signal;
+    const r=await withTimeout(S.sample.json(prompt,opts),90000).catch(e=>{ ctl.abort(); throw e; });
+    if(!r||typeof r!=='object'){ S.lastAIError='bad_reply'; return null; }
+    const ids=new Set(cats.map(c=>c.id)), arr=(a,n,l)=>Array.isArray(a)?a.slice(0,n).map(t=>String(t).toLowerCase().slice(0,l)):[];
+    return {category:ids.has(r.category)?r.category:'others',title:String(r.title||'').slice(0,60),issuer:r.issuer?String(r.issuer).slice(0,50):null,
+      person:r.person?String(r.person).slice(0,50):null,date:validISO(r.doc_date),expiry:validISO(r.expiry_date),due:validISO(r.due_date),
+      amount:r.amount?String(r.amount).slice(0,30):null,summary:r.summary?String(r.summary).slice(0,240):'',tags:arr(r.tags,5,24),keywords:arr(r.keywords,12,24)};
+  }catch(e){
+    S.lastAIError=e?.code||'error';
+    if(e?.code==='rate_limited') S.rateHit=true;
+    if(e?.code==='not_granted') S.sample=null;
+    if(e?.code==='bad_key') toast('The AI key was rejected. Check it in Settings.');
+    return null;
+  }
+}
+async function aiSearch(){
+  if(!S.sample||!S.q||S.aiBusy) return;
+  const q=S.q;
+  let pool=S.files.filter(f=>inScope(f)&&!f.trashedAt);
+  if(pool.length>400){
+    const terms=parseQuery(S.q); const sc=f=>{ const toks=S.index.get(f.id)||[]; return terms.reduce((a,w)=>a+Math.max(tokScore(w,toks).s,...(SYN[w]||[]).map(x=>tokScore(x,toks).s*0.9)),0); };
+    pool=pool.map(f=>({f,s:sc(f)})).sort((a,b)=>b.s-a.s||(b.f.date||'').localeCompare(a.f.date||'')).slice(0,400).map(x=>x.f);
+  }
+  if(!pool.length){ toast('There are no files to search yet'); return; }
+  const lines=pool.map(f=>[f.id,f.title||f.name,catOf(f.folder).name,masterOf(f.master).name,f.date||'',f.issuer||'',f.person||'',f.amount||'',(f.tags||[]).join(' '),(f.keywords||[]).join(' '),(f.summary||'').slice(0,120)].join(' | ')).join('\n');
+  S.aiBusy=true; renderGrid();
+  try{
+    const r=await withTimeout(S.sample.json(`A user in India is searching their personal document vault. Today is ${todayISO()}.
+Their search (may be English or Hinglish, may contain spelling mistakes, may be vague like "last year's electricity bills" or "papa ki gaadi ke papers"): "${q}"
+Files, one per line: id | title | sub-folder | master folder | doc date | issuer | person | amount | tags | keywords | summary
+${lines}
+
+Return ONLY JSON: {"ids":[ids of matching files, best match first, at most 40],"note":"one short plain-English line on what you understood, e.g. electricity bills from 2025"}. Use only ids from the list. If nothing matches, return an empty list.`,{modelTier:'quick'}),60000);
+    const valid=new Set(pool.map(f=>f.id));
+    S.ai={q,ids:(Array.isArray(r?.ids)?r.ids:[]).filter(id=>valid.has(id)),note:r?.note?String(r.note).slice(0,140):''};
+  }catch(e){ toast(e?.code==='rate_limited'?'Too many requests. Try again in a minute.':e?.code==='bad_key'?'The AI key was rejected. Check it in Settings.':e?.code==='timeout'?'AI search took too long. Try again.':'AI search did not work this time'); }
+  S.aiBusy=false; renderGrid();
+}
+/* ---------- offline reader: understands common Indian documents without any AI service ---------- */
+const MONIDX={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};
+const DOC_RULES=[
+  {cat:'id',title:'Aadhaar Card',issuer:'UIDAI',kw:['aadhaar','aadhar','uid','kyc'],re:/aadhaar|aadhar|आधार|uidai|unique identification authority/i},
+  {cat:'id',title:'PAN Card',issuer:'Income Tax Department',kw:['pan','kyc','income tax'],re:/permanent account number|income tax department|आयकर विभाग|\bpan\s*(card|no|number)\b/i},
+  {cat:'id',title:'Voter ID',issuer:'Election Commission of India',kw:['voter','epic','kyc'],re:/election commission|elector'?s? photo|मतदाता|\bepic\b/i},
+  {cat:'id',title:'Passport',issuer:'Government of India',kw:['passport','visa'],re:/\bpassport\b|पासपोर्ट/i},
+  {cat:'vehicle',title:'Driving Licence',issuer:'Transport Department',kw:['dl','license','driving','gaadi'],re:/driving licen[cs]e|ड्राइविंग|\bdl\s*no\b/i},
+  {cat:'vehicle',title:'Vehicle RC',issuer:'RTO',kw:['rc','vehicle','gaadi','registration'],re:/registration certificate|chassis no|engine no|vehicle class|पंजीकरण प्रमाण/i},
+  {cat:'vehicle',title:'Pollution Certificate',kw:['puc','pollution','gaadi'],re:/pollution under control|\bpuc\b/i},
+  {cat:'insurance',title:'Insurance Policy',kw:['insurance','bima','policy','premium'],re:/insurance|policy\s*(no|number)|premium|बीमा|\blic\b/i},
+  {cat:'bills',title:'Electricity Bill',kw:['bijli','electricity','light','power'],re:/electricity|vidyut|बिजली|विद्युत|jvvnl|avvnl|jdvvnl|bses|tata power|msedcl|discom|units consumed|\bkwh\b/i},
+  {cat:'bills',title:'Water Bill',kw:['paani','water'],re:/water\s*(bill|supply|charges)|जल\s*(बिल|विभाग)|\bphed\b/i},
+  {cat:'bills',title:'Gas Bill',kw:['gas','lpg','cylinder'],re:/\blpg\b|gas\s*(bill|booking|connection)|indane|bharat\s*gas|hp\s*gas|\bpng\b/i},
+  {cat:'bills',title:'Mobile Bill',kw:['mobile','phone','recharge'],re:/airtel|\bjio\b|vodafone|\bvi\b postpaid|bsnl|postpaid|prepaid recharge/i},
+  {cat:'bills',title:'Internet Bill',kw:['internet','wifi','broadband','net'],re:/broadband|fibernet|fiber|internet\s*(bill|plan)|wi-?fi/i},
+  {cat:'tax',title:'Income Tax Return',issuer:'Income Tax Department',kw:['itr','tax','kar'],re:/\bitr[- ]?\d?\b|income tax return|form\s*16|form\s*26as|acknowledgement number/i},
+  {cat:'tax',title:'GST Invoice',kw:['gst','invoice','tax','bill'],re:/tax invoice|\bgstin\b|\bcgst\b|\bsgst\b|\bigst\b/i},
+  {cat:'work',title:'Salary Slip',kw:['salary','payslip','tankhwah','naukri'],re:/salary slip|pay\s*slip|net pay|gross (earnings|salary)|वेतन/i},
+  {cat:'work',title:'Offer Letter',kw:['offer','job','naukri'],re:/offer letter|appointment letter|letter of appointment/i},
+  {cat:'bank',title:'Bank Statement',kw:['bank','statement','khata','passbook'],re:/statement of account|account statement|opening balance|closing balance|passbook/i},
+  {cat:'bank',title:'Loan Document',kw:['loan','emi'],re:/loan account|sanction letter|\bemi\b|repayment schedule/i},
+  {cat:'bank',title:'Cheque',kw:['cheque','bank'],re:/pay\s+.*\s+or bearer|\bcheque\b/i},
+  {cat:'medical',title:'Lab Report',kw:['report','test','lab','doctor'],re:/pathology|laboratory|test report|haemoglobin|hemoglobin|blood (sugar|test)|lipid profile|thyroid/i},
+  {cat:'medical',title:'Prescription',kw:['dawai','medicine','doctor','prescription'],re:/prescription|\brx\b|mbbs|\bdr\.\s|tab\.|cap\.|syrup|दवा/i},
+  {cat:'medical',title:'Hospital Bill',kw:['hospital','aspatal','bill'],re:/hospital|discharge summary|in-?patient|out-?patient/i},
+  {cat:'education',title:'Marksheet',kw:['marksheet','result','padhai','school'],re:/marksheet|mark sheet|statement of marks|grade card|\bcgpa\b|\bsgpa\b|board of (secondary|higher)|अंक\s*तालिका/i},
+  {cat:'education',title:'Certificate',kw:['certificate','padhai'],re:/certificate of|this is to certify|प्रमाण पत्र/i},
+  {cat:'education',title:'Fee Receipt',kw:['fees','school','padhai'],re:/fee receipt|tuition fee|school fees|college fees/i},
+  {cat:'travel',title:'Train Ticket',issuer:'IRCTC',kw:['train','rail','ticket','irctc'],re:/irctc|indian railways|\bcoach\b|\bberth\b|electronic reservation slip/i},
+  {cat:'travel',title:'Flight Ticket',kw:['flight','hawai','ticket','boarding'],re:/boarding pass|e-?ticket.*flight|airlines|indigo|air india|vistara|akasa|spicejet/i},
+  {cat:'travel',title:'Bus Ticket',kw:['bus','ticket'],re:/redbus|bus ticket|\brsrtc\b|\bksrtc\b|\bmsrtc\b/i},
+  {cat:'travel',title:'Hotel Booking',kw:['hotel','booking'],re:/hotel|check-?in|check-?out|booking id/i},
+  {cat:'property',title:'Rent Agreement',kw:['rent','kiraya','ghar'],re:/rent agreement|lease agreement|leave and licen[cs]e|किरायानामा/i},
+  {cat:'property',title:'Property Document',kw:['property','ghar','makan'],re:/sale deed|registry|khasra|jamabandi|patta|mutation|property tax|रजिस्ट्री/i},
+  {cat:'receipts',title:'Invoice',kw:['invoice','bill','receipt'],re:/\binvoice\b|bill no|order (id|no|number)|amount paid|payment receipt|\breceipt\b|रसीद/i},
+];
+const ISSUERS=[['JVVNL',/jvvnl|jaipur vidyut/i],['AVVNL',/avvnl|ajmer vidyut/i],['JdVVNL',/jdvvnl|jodhpur vidyut/i],['BSES',/\bbses\b/i],['Tata Power',/tata power/i],['MSEDCL',/msedcl|mahavitaran/i],
+  ['Airtel',/airtel/i],['Jio',/\bjio\b/i],['Vi',/vodafone|\bvi\b/i],['BSNL',/bsnl/i],['Indane',/indane/i],['Bharat Gas',/bharat\s*gas/i],['HP Gas',/hp\s*gas/i],
+  ['SBI',/state bank of india|\bsbi\b/i],['HDFC Bank',/hdfc bank/i],['ICICI Bank',/icici bank/i],['Axis Bank',/axis bank/i],['Kotak',/kotak/i],['PNB',/punjab national bank|\bpnb\b/i],['Bank of Baroda',/bank of baroda/i],
+  ['LIC',/\blic\b|life insurance corporation/i],['Star Health',/star health/i],['HDFC Ergo',/hdfc ergo/i],['ICICI Lombard',/icici lombard/i],['Bajaj Allianz',/bajaj allianz/i],
+  ['IRCTC',/irctc/i],['IndiGo',/indigo/i],['Air India',/air india/i],['Amazon',/amazon/i],['Flipkart',/flipkart/i],['Swiggy',/swiggy/i],['Zomato',/zomato/i],
+  ['UIDAI',/uidai/i],['Income Tax Department',/income tax department/i]];
+function findDates(text){
+  const t=String(text||''), out=[];
+  const push=(i,y,m,d)=>{ const iso=`${y}-${pad(m)}-${pad(d)}`; if(validISO(iso)) out.push({i,iso}); };
+  for(const m of t.matchAll(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.]((?:19|20)\d{2})\b/g)) push(m.index,+m[3],+m[2],+m[1]);
+  for(const m of t.matchAll(/\b((?:19|20)\d{2})-(\d{2})-(\d{2})\b/g)) push(m.index,+m[1],+m[2],+m[3]);
+  for(const m of t.matchAll(/\b(\d{1,2})(?:st|nd|rd|th)?[\s\-]+([A-Za-z]{3,9})[,\s\-]+((?:19|20)\d{2})\b/g)){ const mo=MONIDX[m[2].slice(0,4).toLowerCase()]||MONIDX[m[2].slice(0,3).toLowerCase()]; if(mo) push(m.index,+m[3],mo,+m[1]); }
+  for(const m of t.matchAll(/\b([A-Za-z]{3,9})\s+(\d{1,2}),?\s+((?:19|20)\d{2})\b/g)){ const mo=MONIDX[m[1].slice(0,3).toLowerCase()]; if(mo) push(m.index,+m[3],mo,+m[2]); }
+  return out.sort((a,b)=>a.i-b.i);
+}
+function findDate(text){ return findDates(text)[0]?.iso||null; }
+function labelled(text,dates,re){ const t=String(text||'').toLowerCase(); for(const d of dates){ if(re.test(t.slice(Math.max(0,d.i-45),d.i))) return d.iso; } return null; }
+function offlineRead(file,type,text=''){
+  const all=(file.name+'\n'+text).slice(0,20000), low=all.toLowerCase();
+  // The type mentioned first in the document wins (page 1 decides a multi-page scan); list order breaks ties.
+  const body=text.slice(0,20000); let rule=null, at=Infinity;
+  for(const r of DOC_RULES){ const m=body.match(r.re); if(m && m.index<at-40){ rule=r; at=m.index; } }
+  rule=rule||DOC_RULES.find(r=>r.re.test(file.name));
+  let category=rule?.cat||(type.startsWith('image/')?(/screenshot|screen shot|scr_|ss_|whatsapp image/i.test(file.name)?'screenshots':'photos'):'others');
+  const dates=findDates(text);
+  const due=labelled(text,dates,/(due\s*(date|on|by)?|last\s*date(\s*of\s*payment)?|pay\s*(by|before)|payment\s*due)\s*[:\-]?\s*$|देय|अंतिम/);
+  const expiry=labelled(text,dates,/(valid|validity|expir\w*|renewal|upto|up to|till)\s*(date|on|upto|till)?\s*[:\-]?\s*$|वैध/);
+  const issued=labelled(text,dates,/(bill|invoice|issue|issued|statement|report|date of issue|dated|booking|txn|transaction|pay|salary|credit(ed)?)\s*(date|on)?\s*[:\-]?\s*$|दिनांक/);
+  const date=issued||dates.find(d=>d.iso!==due&&d.iso!==expiry)?.iso||dates[0]?.iso||null;
+  let amount=null; const am=[...all.matchAll(/(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)/gi)];
+  if(am.length){ const near=am.find(m=>/total|payable|amount due|net|grand|paid|premium/i.test(all.slice(Math.max(0,m.index-40),m.index))); const m=near||am.reduce((a,b)=>parseFloat(b[1].replace(/,/g,''))>parseFloat(a[1].replace(/,/g,''))?b:a);
+    const v=parseFloat(m[1].replace(/,/g,'')); if(v>0&&v<1e9) amount='₹'+v.toLocaleString('en-IN',{maximumFractionDigits:2}); }
+  const iss=rule?.issuer||ISSUERS.find(([,re])=>re.test(low))?.[0]||null;
+  const pm=text.match(/(?:^|\n)\s*(?:name|नाम)\s*[:\-]\s*([A-Za-z][A-Za-z .]{2,40})/i); const person=pm?pm[1].trim().replace(/\s+/g,' '):null;
+  const sheet=/\.(xlsx?|csv)$/i.test(file.name);
+  if(sheet && rule && !/invoice|salary|statement/i.test(rule.title)) rule={...rule,title:null};
+  const title=rule?.title||file.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').replace(/\b(img|image|scan|doc|whatsapp image)\b/ig,'').replace(/\s+/g,' ').trim().slice(0,40)||'Document';
+  const kw=[...new Set([...(rule?.kw||[]),...(iss?[iss.toLowerCase()]:[])])];
+  return {category,title,issuer:iss,person,date:date||isoOf(new Date(file.lastModified||Date.now())),dateSource:date?'text':'file',expiry,due,amount,
+    summary:rule&&rule.title?`${title}${iss?' from '+iss:''}${date?', dated '+fmtDate(date):''}${amount?', '+amount:''}.`:'',tags:rule?[category]:[],keywords:kw,offline:true};
+}
+function fallbackMeta(file,type,text=''){ return offlineRead(file,type,text); }
+function useClaude(){ return !!(S.sample && S.useAI && (P.engine?P.engine()==='claude':true)); }
+
+/* ---------- pipeline ---------- */
+function enqueue(files){
+  if(!S.col){ toast('Storage is not ready yet'); return; }
+  if(!S.assets){ toast('You do not have permission to add files here'); return; }
+  const master=S.upMaster||'general';
+  const arr=[...files]; const need=arr.reduce((a,x)=>a+((x.file||x).size||0),0);
+  const free=S.usage&&S.usage.maxBytes?S.usage.maxBytes-S.usage.bytes:null;
+  if(free!==null && free<need*1.3+5*1048576) banner(`Storage is almost full: ${fmtSize(Math.max(0,free))} left. Some files may not save. Delete files from the recycle bin, or download a backup and remove old files.`);
+  arr.forEach(x=>{ const file=x.file||x; S.queue.push({file,ack:x.ack||null,master,state:'wait',msg:'Waiting'}); });
+  renderQueue(); pump();
+}
+async function pump(){
+  if(S.busy) return; S.busy=true; let it;
+  while((it=S.queue.find(i=>i.state==='wait'))){
+    it.state='work'; it.msg='Reading…'; renderQueue();
+    try{ await processOne(it); }catch(e){ it.state='err'; it.retry=!e?.msg; it.msg=e?.msg||('Failed ('+(e?.code||e?.message||'error')+'). Try again.'); }
+    if(it.ack && !it.retry){ try{ await it.ack(); }catch{} it.ack=null; }
+    renderQueue();
+  }
+  S.busy=false; renderQueue(); refreshUsage();
+}
+async function processOne(it){
+  const file=it.file, type=typeOf(file);
+  if(!type) throw {msg:isOfficeName(file.name)?'Word and Excel files can be saved in the downloadable FileSaathi app. Here, save the file as PDF first.':'This format is not supported yet. Use a photo, PDF, text, Word or Excel file.'};
+  if(file.size>20*1048576) throw {msg:'Files must be 20 MB or smaller'};
+  const buf=await file.arrayBuffer(); const hash=await sha(buf.slice(0));
+  const dup=hash&&S.files.find(f=>f.hash===hash);
+  if(dup){ it.state='err'; it.msg=(dup.trashedAt?'Already in the recycle bin: ':'Already saved as ')+dup.name; return; }
+  if(hash&&S.pendingHashes.has(hash)){ it.state='err'; it.msg='Same file as one added a moment ago'; return; }
+  if(hash) S.pendingHashes.add(hash);
+  try{ await saveNew(it,file,type,buf,hash); }catch(e){ if(hash) S.pendingHashes.delete(hash); throw e; }
+}
+async function saveNew(it,file,type,buf,hash){
+  const ext=ACCEPT[type]; let image=null,text='',thumb=null,pages=null;
+  if(type.startsWith('image/')){ try{ image=await toJpeg(file,1600); thumb=await toJpeg(file,480); }catch{} }
+  else if(type==='application/pdf'){ try{ const r=await readPdf(buf.slice(0),!!P.ocr); text=r.text; image=r.page; thumb=r.thumb; pages=r.pages; it.textPages=r.textPages; it.ocrPages=r.ocrPages; }catch{} }
+  else if(OFFICE_TYPES[type]){ try{ const o=await officeRead(buf.slice(0),ACCEPT[type]); text=o.text.slice(0,40000); }catch{}
+    try{ thumb=await officeThumb(ACCEPT[type],file.name.replace(/\.[^.]+$/,''),text); }catch{} }
+  else { try{ text=new TextDecoder().decode(buf).slice(0,12000); }catch{} }
+  let ocr=false;
+  if(P.ocr && S.ocrOn!==false && image && (type.startsWith('image/') || text.trim().length<40)){
+    it.msg='Reading the text on the page…'; renderQueue();
+    try{ const srcs=type.startsWith('image/')?[await toJpeg(file,2200)]:[image,...(it.ocrPages||[])];
+      for(const [i,src] of srcs.entries()){ if(srcs.length>1){ it.msg=`Reading the text on page ${i+1} of ${srcs.length}…`; renderQueue(); }
+        const o=await withTimeout(P.ocr(src),120000); if(o&&o.trim().length>=8){ text=(text+'\n'+o).trim(); ocr=true; } } }catch{}
+    it.msg='Reading…'; renderQueue();
+  }
+  let meta=useClaude()?await analyze({file,text:text.trim(),image,cats:allFolders(),master:masterOf(it.master).name}):null; const aiDone=!!meta;
+  const off=offlineRead(file,type,text);
+  if(meta){ meta.dateSource=meta.date?'ai':null; if(!meta.date){ meta.date=off.date; meta.dateSource=off.dateSource; }
+    meta.expiry=meta.expiry||off.expiry; meta.due=meta.due||off.due; meta.amount=meta.amount||off.amount; }
+  else meta=off;
+  const needsReview=!aiDone && (!off.summary || off.dateSource==='file');
+  it.msg='Saving…'; renderQueue();
+  const up=await S.assets.upload(file,{type});
+  let thumbId=null; if(thumb){ try{ thumbId=(await S.assets.upload(thumb,{type:'image/jpeg'})).id; }catch{} }
+  const folder=meta.category, name=reserveName(uniqueName(buildName(meta,ext),folder),folder);
+  const id='f'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+  try{ await S.col.doc(id).set({kind:'file',asset:up.id,thumb:thumbId,name,original:file.name,type,ext,size:file.size,pages,master:it.master,
+    folder,title:meta.title||'',issuer:meta.issuer||null,person:meta.person||null,date:meta.date||null,dateSource:meta.dateSource||null,
+    expiry:meta.expiry||null,due:meta.due||null,amount:meta.amount||null,summary:meta.summary||'',tags:meta.tags||[],keywords:meta.keywords||[],
+    text:text.trim().replace(/\s+/g,' ').slice(0,8000),textPages:it.textPages||null,ocr,reader:aiDone?'claude':'offline',needsReview,notes:'',star:false,hash,aiDone,trashedAt:null,uploadedAt:new Date().toISOString()}); }
+  catch(e){ try{ await S.assets.delete(up.id); }catch{} if(thumbId) try{ await S.assets.delete(thumbId); }catch{} throw e; }
+  const why=!useClaude()?'':{timeout:'AI took too long',rate_limited:'AI busy',bad_key:'AI key rejected',offline:'offline',bad_reply:'AI reply unclear'}[S.lastAIError]||(S.lastAIError?'AI unavailable':'');
+  const how=aiDone?'Read by AI':why?`Read on this device (${why})`:'Read on this device'+(ocr?' with text scan':'');
+  it.state='done'; it.final=name; it.msg=`${how}${needsReview?' · please check':''} → `+masterOf(it.master).name+' / '+catOf(folder).name;
+}
+async function reanalyze(f){
+  toast('Reading the file again…',0);
+  try{
+    const blob=await P.getBlob(f.asset); const file=new File([blob],f.original,{type:f.type});
+    let image=null,text='';
+    if(f.type.startsWith('image/')) image=await toJpeg(blob,1600);
+    else if(f.type==='application/pdf'){ const r=await readPdf(await blob.arrayBuffer()); text=r.text; image=r.page; }
+    else if(OFFICE_TYPES[f.type]) text=(await officeRead(await blob.arrayBuffer(),f.ext)).text.slice(0,40000);
+    else text=(await blob.text()).slice(0,12000);
+    if(P.ocr && S.ocrOn!==false && image && (f.type.startsWith('image/')||text.trim().length<40)){ toast('Reading the text on the page…',0); try{ const o=await withTimeout(P.ocr(f.type.startsWith('image/')?await toJpeg(blob,2200):image),120000); if(o&&o.trim().length>=8) text=(text+'\n'+o).trim(); }catch{} }
+    let m=useClaude()?await analyze({file,text:text.trim(),image,cats:allFolders(),master:masterOf(f.master).name}):null;
+    const ai=!!m; if(!m){ if(useClaude()&&S.rateHit){ toast('Too many requests. Try again in a minute.'); return; } m=offlineRead(file,f.type,text); }
+    const name=uniqueName(buildName(m.date?m:{...m,date:f.date},f.ext),m.category,f.id);
+    await S.col.doc(f.id).update({name,folder:m.category,title:m.title,issuer:m.issuer,person:m.person,date:m.date||f.date||null,dateSource:m.date?'ai':f.dateSource||null,
+      expiry:m.expiry,due:m.due,amount:m.amount,summary:m.summary,tags:m.tags,keywords:m.keywords,text:text.trim().replace(/\s+/g,' ').slice(0,8000),aiDone:ai,reader:ai?'claude':'offline',needsReview:false});
+    toast('Updated: '+name);
+  }catch(e){ toast('Failed ('+(e?.code||e?.message||'error')+')'); }
+}
+
+/* ---------- zip, download, backup ---------- */
+async function saveBlob(filename,data){
+  if(!S.dl){ toast('Downloads are not available here'); return; }
+  try{ await S.dl.save({filename,data}); }catch(e){ if(e?.code!=='declined') toast('Could not save ('+(e?.code||'error')+')'); }
+}
+function zipPath(f,mode){
+  const y=f.date?f.date.slice(0,4):'Undated', c=cleanDir(catOf(f.folder).name), m=cleanDir(masterOf(f.master).name);
+  return (mode==='full'?m+'/'+c+'/':mode==='cat'?c+'/':'')+y+'/'+f.name;
+}
+function viewMode(){ if(S.master==='all') return 'full'; return LIBVIEWS.includes(S.view)?'cat':'year'; }
+async function buildZip(list,mode){
+  if(!window.JSZip) throw new Error('nozip');
+  const z=new JSZip(); const rows=[['master_folder','sub_folder','file','document_date','expiry','due','issuer','amount','original_name','tags','notes']];
+  let done=0; const missing=[], used=new Set(); toast(`Building ZIP: 0 of ${list.length}`,0);
+  const freePath=p=>{ if(!used.has(p.toLowerCase())){ used.add(p.toLowerCase()); return p; } const i=p.lastIndexOf('.'), b=i>0?p.slice(0,i):p, x=i>0?p.slice(i):'';
+    for(let k=2;;k++){ const c=`${b}_(${k})${x}`; if(!used.has(c.toLowerCase())){ used.add(c.toLowerCase()); return c; } } };
+  for(const f of list){
+    try{ const b=await P.getBlob(f.asset); z.file(freePath(zipPath(f,mode)),b,{date:f.date?new Date(f.date+'T12:00:00'):new Date()});
+      rows.push([masterOf(f.master).name,catOf(f.folder).name,f.name,f.date||'',f.expiry||'',f.due||'',f.issuer||'',f.amount||'',f.original||'',(f.tags||[]).join('; '),f.notes||'']); }
+    catch{ missing.push(f.name); }
+    done++; if(done%3===0||done===list.length) toast(`Building ZIP: ${done} of ${list.length}`,0);
+  }
+  z.file('index.csv','\ufeff'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n'));
+  if(missing.length) z.file('MISSING-FILES.txt','These files could not be added to this ZIP:\r\n'+missing.join('\r\n'));
+  const blob=await z.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:5}});
+  $('#toast').hidden=true; S.lastMissing=missing; return blob;
+}
+function showMissing(missing,what){
+  if(!missing.length) return;
+  showPanel('problem');
+  $('#drawer').innerHTML=head('Some files were left out')+`<div class="dbody">
+    <div class="confirm" style="width:auto">${plural(missing.length,'file')} could not be added to the ${esc(what)}. Everything else is included${what==='backup'?', and the backup lists the missing files':''}.</div>
+    <div class="flist">${missing.map(n=>`<span>${esc(n)}</span>`).join('')}</div>
+    <p style="margin:0;color:var(--muted);font-size:.88rem">${esc(P.missingHelp||'Reload the page and try again. If a file keeps failing, open it and press Download to check it.')}</p></div>`;
+}
+async function zipList(list,label,mode){
+  list=list.filter(f=>!f.trashedAt); if(!list.length) return;
+  try{ const blob=await buildZip(list,mode); const miss=S.lastMissing||[]; await saveBlob(`FileSaathi_${slug(label)}_${todayISO()}.zip`,blob); showMissing(miss,'ZIP'); }
+  catch{ toast('The ZIP could not be built. Reload and try again.'); }
+}
+function viewShareLabel(){ const {m,v}=viewLabel(); return (m?m+' - ':'')+v+(S.year!=='all'?' '+S.year:''); }
+async function backup(){
+  if(!window.JSZip) return;
+  const z=new JSZip(); const recs=[], missing=[]; let n=0; toast('Building backup…',0);
+  for(const f of S.files){
+    const r={...f}; delete r.__id;
+    try{ z.file('files/'+f.asset,await P.getBlob(f.asset)); }catch{ missing.push(f.name); r.blobMissing=true; recs.push(r); continue; }
+    if(f.thumb){ try{ z.file('files/'+f.thumb,await P.getBlob(f.thumb)); }catch{ r.thumb=null; } }
+    recs.push(r); n++; if(n%3===0) toast(`Building backup: ${n} of ${S.files.length}`,0);
+  }
+  const st={...S.settings}; delete st.__id;
+  z.file('vault.json',JSON.stringify({app:'FileSaathi',version:1,exported:new Date().toISOString(),complete:!missing.length,missing,settings:st,files:recs},null,1));
+  if(missing.length) z.file('MISSING-FILES.txt','Details are saved for these files, but the files themselves could not be read:\r\n'+missing.join('\r\n'));
+  const blob=await z.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:4}});
+  $('#toast').hidden=true; await saveBlob(`FileSaathi_Backup_${todayISO()}.zip`,blob);
+  try{ localStorage.setItem('fs_last_backup',JSON.stringify({at:new Date().toISOString(),files:recs.length-missing.length,missing:missing.length})); }catch{}
+  if(missing.length) showMissing(missing,'backup'); else if(S.panel==='settings') renderSettings();
+}
+async function readBackup(file){
+  if(!window.JSZip) throw {msg:'The ZIP tool did not load. Reload and try again.'};
+  let z; try{ z=await JSZip.loadAsync(file); }catch{ throw {msg:'This file is not a ZIP, or it is damaged.'}; }
+  const vj=z.file('vault.json'); if(!vj) throw {msg:'This ZIP is not a FileSaathi backup (vault.json is missing).'};
+  let data; try{ data=JSON.parse(await vj.async('string')); }catch{ throw {msg:'The backup details are damaged (vault.json cannot be read).'}; }
+  if(data?.app!=='FileSaathi'||!Array.isArray(data.files)) throw {msg:'This is not a FileSaathi backup.'};
+  if((data.version||1)>1) throw {msg:'This backup was made by a newer FileSaathi. Update the app, then restore.'};
+  const hashes=new Set(S.files.map(f=>f.hash).filter(Boolean)), plan=[], dup=[], missing=[], bad=[]; let bytes=0;
+  for(const r of data.files){
+    const name=typeof r?.name==='string'?r.name:'(no name)';
+    if(!r||typeof r.asset!=='string'||typeof r.name!=='string'||!ACCEPT[r.type]||r.kind!=='file'){ bad.push(name); continue; }
+    if(r.hash && hashes.has(r.hash)){ dup.push(name); continue; }
+    const fz=!r.blobMissing&&z.file('files/'+r.asset); if(!fz){ missing.push(name); continue; }
+    bytes+=fz._data?.uncompressedSize||r.size||0; plan.push(r); if(r.hash) hashes.add(r.hash);
+  }
+  return {z,data,plan,dup,missing,bad,bytes};
+}
+async function restorePreview(file){
+  showPanel('restore'); $('#drawer').innerHTML=head('Restore from backup')+'<div class="dbody"><p style="margin:0">Checking the backup…</p></div>';
+  let b; try{ b=await readBackup(file); }catch(e){ $('#drawer').innerHTML=head('Restore from backup')+`<div class="dbody"><div class="confirm" style="width:auto">${esc(e.msg||'The backup could not be read.')}</div></div>`; return; }
+  await refreshUsage(); const free=S.usage&&S.usage.maxBytes?S.usage.maxBytes-S.usage.bytes:null; const tooBig=free!==null&&b.bytes>free;
+  S.restorePlan=b;
+  const row=(label,arr,tone)=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)"><span>${label}</span><b style="${tone||''}">${arr.length}</b></div>`;
+  $('#drawer').innerHTML=head('Restore from backup')+`<div class="dbody">
+    <p style="margin:0;color:var(--muted)">Backup from ${esc(fmtDate((b.data.exported||'').slice(0,10))||'an unknown date')}${b.data.complete===false?' (this backup was already incomplete when it was made)':''}.</p>
+    <div>${row('Will be added',b.plan)}${row('Already in your vault (skipped)',b.dup)}${row('Listed but missing from the backup',b.missing,b.missing.length?'color:var(--danger)':'')}${row('Damaged or unreadable entries',b.bad,b.bad.length?'color:var(--danger)':'')}</div>
+    <p style="margin:0">Space needed: <b>${fmtSize(b.bytes)}</b>${free!==null?` · available: <b>${fmtSize(Math.max(0,free))}</b>`:''}</p>
+    ${tooBig?`<div class="confirm" style="width:auto">There is not enough space for this backup. Free up ${fmtSize(b.bytes-free)} first, for example by emptying the recycle bin.</div>`:''}
+    ${b.missing.length||b.bad.length?`<div class="flist">${[...b.missing,...b.bad].slice(0,60).map(n=>`<span>${esc(n)}</span>`).join('')}</div>`:''}
+    <div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn gold" id="restoreGo"${!b.plan.length||tooBig?' disabled':''}>Restore ${plural(b.plan.length,'file')}</button><button class="btn" id="pClose2">Cancel</button></div>
+  </div>`;
+}
+async function restoreRun(){
+  const b=S.restorePlan; if(!b) return; S.restorePlan=null;
+  const sm=new Map(masters().map(m=>[m.id,m])); const sf=new Map(allFolders().map(c=>[c.id,c]));
+  const st=b.data.settings||{};
+  const addM=(st.masters||[]).filter(m=>m&&m.id&&!sm.has(m.id)), addF=(st.folders||[]).filter(c=>c&&c.id&&!sf.has(c.id));
+  const patch={}; if(addM.length) patch.masters=[...(S.settings.masters||[]),...addM]; if(addF.length) patch.folders=[...(S.settings.folders||[]),...addF];
+  if(st.generalName && !S.settings.generalName) patch.generalName=st.generalName;
+  if(Object.keys(patch).length) await saveSettings(patch);
+  const added=[], failed=[]; let i=0;
+  $('#drawer').innerHTML=head('Restoring…')+'<div class="dbody"><p style="margin:0" id="rProg">Starting…</p></div>';
+  for(const r of b.plan){
+    i++; const pr=$('#rProg'); if(pr) pr.textContent=`Restoring ${i} of ${b.plan.length}: ${r.name}`;
+    let up=null, th=null;
+    try{
+      const blob=new Blob([await b.z.file('files/'+r.asset).async('blob')],{type:r.type});
+      const h=await sha(await blob.arrayBuffer());
+      if(r.hash && h && h!==r.hash){ failed.push(r.name+' (file content does not match, damaged)'); continue; }
+      up=await S.assets.upload(blob,{type:r.type});
+      if(r.thumb && b.z.file('files/'+r.thumb)){ try{ th=(await S.assets.upload(new Blob([await b.z.file('files/'+r.thumb).async('blob')],{type:'image/jpeg'}),{type:'image/jpeg'})).id; }catch{} }
+      const rec={...r,asset:up.id,thumb:th,hash:r.hash||h}; ['id','__id','updatedAt','driveId','driveThumbId','drivePath','driveTrashed','blobMissing','remoteMissing'].forEach(k=>delete rec[k]);
+      if(!rec.master||(rec.master!=='general'&&!masters().some(m=>m.id===rec.master)&&!addM.some(m=>m.id===rec.master))) rec.master='general';
+      rec.name=reserveName(uniqueName(rec.name,rec.folder),rec.folder);
+      const id='f'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      await S.col.doc(id).set(rec); added.push(rec.name);
+    }catch(e){
+      if(up) try{ await S.assets.delete(up.id); }catch{} if(th) try{ await S.assets.delete(th); }catch{}
+      failed.push(r.name+' ('+(e?.code==='quota_or_state'?'storage full':e?.code||e?.message||'error')+')');
+    }
+  }
+  refreshUsage();
+  const row=(label,n,tone)=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)"><span>${label}</span><b style="${tone||''}">${n}</b></div>`;
+  $('#drawer').innerHTML=head('Restore finished')+`<div class="dbody">
+    <div>${row('Added',added.length,'color:var(--ok)')}${row('Already here (skipped)',b.dup.length)}${row('Missing from the backup',b.missing.length,b.missing.length?'color:var(--danger)':'')}${row('Failed',failed.length+b.bad.length,failed.length+b.bad.length?'color:var(--danger)':'')}</div>
+    ${failed.length||b.missing.length||b.bad.length?`<div class="flist">${[...failed,...b.missing.map(n=>n+' (missing)'),...b.bad.map(n=>n+' (unreadable)')].slice(0,80).map(n=>`<span>${esc(n)}</span>`).join('')}</div>`:''}
+    <div class="row"><button class="btn primary" id="pClose2">Done</button></div></div>`;
+}
+
+/* ---------- scanner: camera shots or photos -> straightened, cleaned pages -> one PDF ----------
+   Loaded inside core.js (same scope). Uses: S, $, esc, toast, toastAction, head, showPanel, closePanel,
+   enqueue, todayISO, pad, plural, catOf, P. */
+const SCAN_MAX=2000;
+async function scanLoad(blob){
+  const bmp=await createImageBitmap(blob); const k=Math.min(1,SCAN_MAX/Math.max(bmp.width,bmp.height));
+  const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(bmp.width*k)); c.height=Math.max(1,Math.round(bmp.height*k));
+  c.getContext('2d').drawImage(bmp,0,0,c.width,c.height); if(bmp.close) try{ bmp.close(); }catch{} return c;
+}
+const fullQuad=c=>[[0,0],[c.width,0],[c.width,c.height],[0,c.height]];
+function quadArea(q){ let a=0; for(let i=0;i<4;i++){ const [x1,y1]=q[i],[x2,y2]=q[(i+1)%4]; a+=x1*y2-x2*y1; } return Math.abs(a)/2; }
+/* Find the document's four corners: Otsu threshold, largest bright (or dark) region, extreme points. */
+function detectQuad(src){
+  const k=Math.min(1,480/Math.max(src.width,src.height)); const w=Math.max(8,Math.round(src.width*k)), h=Math.max(8,Math.round(src.height*k));
+  const c=document.createElement('canvas'); c.width=w; c.height=h; const g=c.getContext('2d',{willReadFrequently:true}); g.drawImage(src,0,0,w,h);
+  const d=g.getImageData(0,0,w,h).data, n=w*h, gray=new Uint8Array(n), hist=new Uint32Array(256);
+  for(let i=0;i<n;i++){ const v=(d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114)|0; gray[i]=v; hist[v]++; }
+  let sum=0; for(let i=0;i<256;i++) sum+=i*hist[i];
+  let sB=0,wB=0,best=-1,th=128; for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB) continue; const wF=n-wB; if(!wF) break; sB+=t*hist[t];
+    const mB=sB/wB, mF=(sum-sB)/wF, v=wB*wF*(mB-mF)*(mB-mF); if(v>best){ best=v; th=t; } }
+  const lab=new Int32Array(n), stack=new Int32Array(n);
+  for(const bright of [true,false]){
+    lab.fill(0); let cur=0,bestN=0,bestL=0;
+    const on=i=>bright?gray[i]>th:gray[i]<=th;
+    for(let i=0;i<n;i++){
+      if(lab[i]||!on(i)) continue; cur++; let sp=0,cnt=0; stack[sp++]=i; lab[i]=cur;
+      while(sp){ const p=stack[--sp]; cnt++; const x=p%w;
+        if(x>0&&!lab[p-1]&&on(p-1)){ lab[p-1]=cur; stack[sp++]=p-1; }
+        if(x<w-1&&!lab[p+1]&&on(p+1)){ lab[p+1]=cur; stack[sp++]=p+1; }
+        if(p>=w&&!lab[p-w]&&on(p-w)){ lab[p-w]=cur; stack[sp++]=p-w; }
+        if(p<n-w&&!lab[p+w]&&on(p+w)){ lab[p+w]=cur; stack[sp++]=p+w; } }
+      if(cnt>bestN){ bestN=cnt; bestL=cur; }
+    }
+    if(bestN/n<0.12||bestN/n>0.97) continue;
+    let tl=[0,0,Infinity],tr=[0,0,-Infinity],br=[0,0,-Infinity],bl=[0,0,Infinity];
+    for(let i=0;i<n;i++){ if(lab[i]!==bestL) continue; const x=i%w,y=(i/w)|0,s=x+y,df=x-y;
+      if(s<tl[2]) tl=[x,y,s]; if(s>br[2]) br=[x,y,s]; if(df>tr[2]) tr=[x,y,df]; if(df<bl[2]) bl=[x,y,df]; }
+    const q=[tl,tr,br,bl].map(([x,y])=>[Math.min(src.width,Math.max(0,(x+0.5)/k)),Math.min(src.height,Math.max(0,(y+0.5)/k))]);
+    const frac=quadArea(q)/(src.width*src.height);
+    if(frac<0.12) continue;
+    if(frac>0.95) return null;
+    return q;
+  }
+  return null;
+}
+function homography(srcPts,dstPts){
+  const A=[],b=[];
+  for(let i=0;i<4;i++){ const [x,y]=dstPts[i],[u,v]=srcPts[i]; A.push([x,y,1,0,0,0,-u*x,-u*y]); b.push(u); A.push([0,0,0,x,y,1,-v*x,-v*y]); b.push(v); }
+  for(let i=0;i<8;i++){ let m=i; for(let r=i+1;r<8;r++) if(Math.abs(A[r][i])>Math.abs(A[m][i])) m=r;
+    [A[i],A[m]]=[A[m],A[i]]; [b[i],b[m]]=[b[m],b[i]];
+    for(let r=i+1;r<8;r++){ const f=A[r][i]/A[i][i]; for(let c=i;c<8;c++) A[r][c]-=f*A[i][c]; b[r]-=f*b[i]; } }
+  const h=new Array(8); for(let i=7;i>=0;i--){ let s=b[i]; for(let c=i+1;c<8;c++) s-=A[i][c]*h[c]; h[i]=s/A[i][i]; }
+  return [...h,1];
+}
+function scanWarp(src,quad,maxSide){
+  const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+  let W=Math.max(dist(quad[0],quad[1]),dist(quad[3],quad[2])), H=Math.max(dist(quad[0],quad[3]),dist(quad[1],quad[2]));
+  const k=Math.min(1,maxSide/Math.max(W,H)); W=Math.max(1,Math.round(W*k)); H=Math.max(1,Math.round(H*k));
+  const out=document.createElement('canvas'); out.width=W; out.height=H; const og=out.getContext('2d');
+  const isFull=quad.every((p,i)=>Math.abs(p[0]-fullQuad(src)[i][0])<1&&Math.abs(p[1]-fullQuad(src)[i][1])<1);
+  if(isFull){ og.drawImage(src,0,0,W,H); return out; }
+  const hm=homography(quad,[[0,0],[W,0],[W,H],[0,H]]);
+  const sw=src.width, sh=src.height, SD=src.getContext('2d',{willReadFrequently:true}).getImageData(0,0,sw,sh).data;
+  const od=og.createImageData(W,H), O=od.data;
+  for(let y=0;y<H;y++){ for(let x=0;x<W;x++){
+    const z=hm[6]*x+hm[7]*y+1; let u=(hm[0]*x+hm[1]*y+hm[2])/z, v=(hm[3]*x+hm[4]*y+hm[5])/z;
+    if(u<0)u=0; else if(u>sw-1.001)u=sw-1.001; if(v<0)v=0; else if(v>sh-1.001)v=sh-1.001;
+    const x0=u|0,y0=v|0,fx=u-x0,fy=v-y0,i00=(y0*sw+x0)*4,i10=i00+4,i01=i00+sw*4,i11=i01+4,o=(y*W+x)*4;
+    for(let ch=0;ch<3;ch++) O[o+ch]=(SD[i00+ch]*(1-fx)+SD[i10+ch]*fx)*(1-fy)+(SD[i01+ch]*(1-fx)+SD[i11+ch]*fx)*fy;
+    O[o+3]=255; } }
+  og.putImageData(od,0,0); return out;
+}
+function scanEnhance(c,mode){
+  if(mode==='color') return c;
+  const g=c.getContext('2d',{willReadFrequently:true}), id=g.getImageData(0,0,c.width,c.height), d=id.data, n=c.width*c.height;
+  if(mode==='clean'){
+    const hist=new Uint32Array(256); for(let i=0;i<n;i++) hist[(d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114)|0]++;
+    let acc=0,white=255,black=0; for(let v=255;v>=0;v--){ acc+=hist[v]; if(acc>n*0.1){ white=v; break; } }
+    acc=0; for(let v=0;v<256;v++){ acc+=hist[v]; if(acc>n*0.02){ black=v; break; } }
+    const r=Math.max(40,white-black);
+    for(let i=0;i<n*4;i+=4) for(let ch=0;ch<3;ch++){ let v=(d[i+ch]-black)/r; v=v<0?0:v>1?1:v; d[i+ch]=255*Math.pow(v,1.25); }
+  } else {
+    const w=c.width,h=c.height,gray=new Float32Array(n); for(let i=0;i<n;i++) gray[i]=d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114;
+    const W1=w+1, I=new Float64Array(W1*(h+1));
+    for(let y=1;y<=h;y++){ let row=0; for(let x=1;x<=w;x++){ row+=gray[(y-1)*w+x-1]; I[y*W1+x]=I[(y-1)*W1+x]+row; } }
+    const r=Math.max(8,Math.round(Math.max(w,h)/40));
+    for(let y=0;y<h;y++){ const y0=Math.max(0,y-r),y1=Math.min(h,y+r+1);
+      for(let x=0;x<w;x++){ const x0=Math.max(0,x-r),x1=Math.min(w,x+r+1);
+        const s=I[y1*W1+x1]-I[y0*W1+x1]-I[y1*W1+x0]+I[y0*W1+x0], m=s/((y1-y0)*(x1-x0));
+        const v=gray[y*w+x]<m*0.9?0:255, o=(y*w+x)*4; d[o]=d[o+1]=d[o+2]=v; } }
+  }
+  g.putImageData(id,0,0); return c;
+}
+function scanRotate(pg){
+  const c=pg.src, o=document.createElement('canvas'); o.width=c.height; o.height=c.width;
+  const g=o.getContext('2d'); g.translate(o.width,0); g.rotate(Math.PI/2); g.drawImage(c,0,0);
+  const m=([x,y])=>[c.height-y,x]; const q=pg.quad; pg.quad=[m(q[3]),m(q[0]),m(q[1]),m(q[2])]; pg.src=o;
+}
+function scanRender(pg,maxSide){ const c=scanWarp(pg.src,pg.quad,maxSide); return scanEnhance(c,pg.mode); }
+
+/* ---------- scan editor panel ---------- */
+async function scanStart(blobs,opts={}){
+  S.scan={pages:[],cur:0,origIds:opts.origIds||[],label:opts.label||'Scan'};
+  showPanel('scan');
+  $('#drawer').innerHTML=head('Scan to PDF')+'<div class="dbody"><p style="margin:0">Preparing pages…</p></div>';
+  await scanAdd(blobs,opts.noCrop);
+}
+async function scanAdd(blobs,noCrop){
+  const sc=S.scan; if(!sc) return;
+  for(const b of blobs){
+    if(sc.pages.length>=40){ toast('A scan can have up to 40 pages'); break; }
+    try{
+      const src=await scanLoad(b); const shot=noCrop===true||/screenshot/i.test(b.name||'');
+      const q=shot?null:detectQuad(src);
+      sc.pages.push({src,quad:q||fullQuad(src),auto:!!q,mode:shot?'color':'clean'});
+    }catch{ toast('One image could not be opened'); }
+  }
+  if(sc.pages.length) sc.cur=Math.min(sc.cur,sc.pages.length-1);
+  if(!sc.pages.length){ closePanel(); toast('No pages to scan'); return; }
+  renderScan();
+}
+function renderScan(){
+  const sc=S.scan; if(!sc) return; const pg=sc.pages[sc.cur];
+  const modes=[['clean','Clean'],['color','Colour'],['bw','Black & white']];
+  $('#drawer').innerHTML=head('Scan to PDF')+`
+  <div class="dbody" style="gap:12px">
+    <p style="margin:0;color:var(--muted);font-size:.86rem">Drag the four corners to the edges of the document. FileSaathi straightens and cleans each page, then saves all pages as one PDF.</p>
+    <div id="scanStage" style="position:relative;align-self:center;max-width:100%;line-height:0;touch-action:none">
+      <canvas id="scanCv" style="display:block;max-width:100%;height:auto;border-radius:8px;background:var(--sunk)"></canvas>
+      <svg id="scanSvg" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible"></svg>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      ${modes.map(([v,l])=>`<button class="chip${pg.mode===v?' on':''}" data-smode="${v}">${l}</button>`).join('')}
+      <span style="flex:1"></span>
+      <button class="btn sm" id="scanRot">Rotate</button>
+      <button class="btn sm" id="scanAuto">${pg.auto?'Use whole photo':'Find edges'}</button>
+      <button class="btn sm danger" id="scanDel"${sc.pages.length<2?' disabled':''}>Remove page</button>
+    </div>
+    <div style="display:flex;gap:8px;overflow-x:auto;padding:4px 2px" id="scanStrip">
+      ${sc.pages.map((p,i)=>`<button data-spage="${i}" style="flex:none;border:2px solid ${i===sc.cur?'var(--gold)':'var(--line)'};border-radius:8px;padding:0;background:var(--surface);position:relative;width:64px;height:84px;overflow:hidden">
+        <canvas data-sthumb="${i}" style="width:100%;height:100%;object-fit:contain;display:block"></canvas>
+        <span style="position:absolute;left:3px;bottom:2px;font-size:.7rem;font-weight:700;color:var(--ink);background:var(--surface);border-radius:4px;padding:0 3px">${i+1}</span></button>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${sc.cur>0?'<button class="btn sm" id="scanLeft">◀ Move earlier</button>':''}${sc.cur<sc.pages.length-1?'<button class="btn sm" id="scanRight">Move later ▶</button>':''}
+      <button class="btn sm" id="scanAddCam">+ Camera page</button><button class="btn sm" id="scanAddPh">+ Photos</button>
+    </div>
+  </div>
+  <div class="dfoot"><button class="btn gold" id="scanDone">Save as PDF (${plural(sc.pages.length,'page')})</button><button class="btn sp" id="scanCancel">Cancel</button></div>`;
+  scanDrawStage(); scanThumbs();
+}
+function scanDrawStage(){
+  const sc=S.scan, pg=sc.pages[sc.cur], cv=$('#scanCv'), svg=$('#scanSvg'); if(!cv) return;
+  const k=Math.min(1,900/Math.max(pg.src.width,pg.src.height)); cv.width=Math.round(pg.src.width*k); cv.height=Math.round(pg.src.height*k);
+  cv.getContext('2d').drawImage(pg.src,0,0,cv.width,cv.height);
+  svg.setAttribute('viewBox',`0 0 ${cv.width} ${cv.height}`); sc.k=k;
+  const pts=pg.quad.map(([x,y])=>[x*k,y*k]); const r=Math.max(10,Math.round(Math.max(cv.width,cv.height)/36));
+  svg.innerHTML=`<polygon points="${pts.map(p=>p.join(',')).join(' ')}" fill="rgba(233,192,109,.18)" stroke="#E9C06D" stroke-width="${Math.max(2,r/4)}"/>`+
+    pts.map((p,i)=>`<circle data-h="${i}" cx="${p[0]}" cy="${p[1]}" r="${r}" fill="#141238" fill-opacity=".55" stroke="#E9C06D" stroke-width="${Math.max(2,r/4)}" style="cursor:grab;touch-action:none"/>`).join('');
+}
+let scanThumbT;
+function scanThumbs(only){
+  clearTimeout(scanThumbT);
+  scanThumbT=setTimeout(()=>{ const sc=S.scan; if(!sc) return;
+    sc.pages.forEach((p,i)=>{ if(only!=null&&i!==only) return; const c=document.querySelector(`[data-sthumb="${i}"]`); if(!c) return;
+      const r=scanRender(p,160); c.width=r.width; c.height=r.height; c.getContext('2d').drawImage(r,0,0); }); },only!=null?120:10);
+}
+document.addEventListener('pointerdown',e=>{
+  const h=e.target.closest?.('#scanSvg circle[data-h]'); if(!h||!S.scan) return;
+  e.preventDefault(); const i=+h.dataset.h, svg=$('#scanSvg'); h.setPointerCapture?.(e.pointerId);
+  const move=ev=>{ const sc=S.scan; if(!sc) return; const pg=sc.pages[sc.cur]; const r=svg.getBoundingClientRect();
+    const x=Math.min(pg.src.width,Math.max(0,(ev.clientX-r.left)/r.width*pg.src.width)), y=Math.min(pg.src.height,Math.max(0,(ev.clientY-r.top)/r.height*pg.src.height));
+    pg.quad[i]=[x,y]; pg.auto=true; scanDrawStage(); };
+  const up=()=>{ window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); scanThumbs(S.scan?.cur); };
+  window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
+});
+async function scanFinish(){
+  const sc=S.scan; if(!sc||!sc.pages.length) return;
+  if(!window.jspdf?.jsPDF){ toast('The PDF tool did not load. Reload and try again.'); return; }
+  const btn=$('#scanDone'); if(btn){ btn.disabled=true; btn.textContent='Making the PDF…'; }
+  await new Promise(r=>setTimeout(r,30));
+  try{
+    let pdf=null;
+    for(const [i,pg] of sc.pages.entries()){
+      if(btn) btn.textContent=`Making the PDF… page ${i+1} of ${sc.pages.length}`; await new Promise(r=>setTimeout(r,0));
+      const c=scanRender(pg,2000); const url=c.toDataURL('image/jpeg',0.82);
+      const wPt=595.28, hPt=wPt*c.height/c.width, fmt=[wPt,hPt], orient=hPt>=wPt?'portrait':'landscape';
+      if(!pdf) pdf=new window.jspdf.jsPDF({unit:'pt',format:fmt,orientation:orient,compress:true}); else pdf.addPage(fmt,orient);
+      pdf.addImage(url,'JPEG',0,0,wPt,hPt,undefined,'FAST'); c.width=c.height=0;
+    }
+    const d=new Date(), stamp=`${todayISO()}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+    const file=new File([pdf.output('blob')],`${sc.label}_${stamp}.pdf`,{type:'application/pdf',lastModified:Date.now()});
+    const orig=sc.origIds; S.scan=null; closePanel();
+    enqueue([file]);
+    if(orig.length) toastAction(`Saving your ${plural(orig.length,'photo')} as one PDF. Move the original photos to the recycle bin?`,'Move to bin',async()=>{
+      const at=new Date().toISOString(); for(const id of orig) try{ await S.col.doc(id).update({trashedAt:at}); }catch{} toast('Original photos moved to the recycle bin'); },12000);
+    else toast('Saving the scan as a PDF…');
+  }catch(e){ toast('The PDF could not be made ('+(e?.message||'error')+')'); if(btn){ btn.disabled=false; btn.textContent='Save as PDF'; } }
+}
+function scanClick(id,t){
+  const sc=S.scan; if(!sc) return false; const pg=sc.pages[sc.cur];
+  if(t.dataset.smode){ pg.mode=t.dataset.smode; renderScan(); return true; }
+  if(t.dataset.spage!=null){ sc.cur=+t.dataset.spage; renderScan(); return true; }
+  switch(id){
+    case 'scanRot': scanRotate(pg); renderScan(); return true;
+    case 'scanAuto': if(pg.auto){ pg.quad=fullQuad(pg.src); pg.auto=false; } else { const q=detectQuad(pg.src); if(q){ pg.quad=q; pg.auto=true; } else toast('No clear document edges found. Drag the corners instead.'); } renderScan(); return true;
+    case 'scanDel': if(sc.pages.length>1){ sc.pages.splice(sc.cur,1); sc.cur=Math.max(0,sc.cur-1); renderScan(); } return true;
+    case 'scanLeft': if(sc.cur>0){ [sc.pages[sc.cur-1],sc.pages[sc.cur]]=[sc.pages[sc.cur],sc.pages[sc.cur-1]]; sc.cur--; renderScan(); } return true;
+    case 'scanRight': if(sc.cur<sc.pages.length-1){ [sc.pages[sc.cur+1],sc.pages[sc.cur]]=[sc.pages[sc.cur],sc.pages[sc.cur+1]]; sc.cur++; renderScan(); } return true;
+    case 'scanAddCam': $('#scanInput').click(); return true;
+    case 'scanAddPh': $('#photosInput').dataset.add='1'; $('#photosInput').click(); return true;
+    case 'scanDone': scanFinish(); return true;
+    case 'scanCancel': S.scan=null; closePanel(); return true;
+  }
+  return false;
+}
+
+/* ---------- Word / Excel ---------- */
+const OFFICE_TYPES={'application/vnd.openxmlformats-officedocument.wordprocessingml.document':'docx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'xlsx','application/msword':'doc','application/vnd.ms-excel':'xls'};
+const OFFICE_EXT={docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',doc:'application/msword',xls:'application/vnd.ms-excel'};
+const xmlDec=s=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&#(\d+);/g,(m,n)=>String.fromCharCode(+n)).replace(/&amp;/g,'&');
+const colIdx=s=>[...s].reduce((a,ch)=>a*26+ch.charCodeAt(0)-64,0)-1;
+async function officeRead(buf,ext){
+  if(!window.JSZip||!['docx','xlsx'].includes(ext)) return {text:'',table:null};
+  let z; try{ z=await JSZip.loadAsync(buf); }catch{ return {text:'',table:null}; }
+  if(ext==='docx'){
+    const x=await z.file('word/document.xml')?.async('string')||'';
+    const text=xmlDec(x.replace(/<w:tab\/>/g,'\t').replace(/<\/w:p>/g,'\n').replace(/<w:br[^>]*\/>/g,'\n').replace(/<[^>]+>/g,'')).replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+    return {text,table:null};
+  }
+  const ss=[]; const sx=await z.file('xl/sharedStrings.xml')?.async('string');
+  if(sx) for(const m of sx.matchAll(/<si>([\s\S]*?)<\/si>/g)) ss.push(xmlDec(m[1].replace(/<rPh[\s\S]*?<\/rPh>/g,'').replace(/<[^>]+>/g,'')));
+  const sheets=Object.keys(z.files).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort((a,b)=>parseInt(a.match(/\d+/))-parseInt(b.match(/\d+/)));
+  let text='', table=null;
+  for(const [si,name] of sheets.entries()){
+    const x=await z.file(name).async('string'); const rows=[];
+    for(const r of x.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)){
+      const row=[];
+      for(const c of r[1].matchAll(/<c([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)){
+        const at=c[1], body=c[2]||''; const ref=(at.match(/r="([A-Z]+)\d+"/)||[])[1]; const col=ref?colIdx(ref):row.length;
+        const t=(at.match(/t="(\w+)"/)||[])[1]; let v=(body.match(/<v>([\s\S]*?)<\/v>/)||[])[1];
+        if(t==='s') v=ss[+v]; else if(t==='inlineStr') v=xmlDec(body.replace(/<[^>]+>/g,'')); else if(v!=null) v=xmlDec(v);
+        if(col<200) row[col]=v??'';
+      }
+      rows.push(Array.from(row,v=>v??'')); if(rows.length>=3000) break;
+    }
+    if(si===0) table=rows.slice(0,60);
+    text+=rows.map(r=>r.filter(v=>v!=='').join(' ')).join('\n')+'\n'; if(text.length>60000) break;
+  }
+  return {text:text.trim(),table};
+}
+async function officeThumb(ext,title,text){
+  const c=document.createElement('canvas'); c.width=480; c.height=360; const g=c.getContext('2d');
+  const word=ext==='docx'||ext==='doc', band=word?'#2B579A':'#217346';
+  g.fillStyle='#ffffff'; g.fillRect(0,0,480,360); g.fillStyle=band; g.fillRect(0,0,480,64);
+  g.fillStyle='#fff'; g.font='bold 24px system-ui,sans-serif'; g.fillText(ext.toUpperCase(),64,42);
+  g.font='600 19px system-ui,sans-serif'; g.fillText(String(title||'').slice(0,26),140,42);
+  if(word){ g.fillStyle='#55556a'; g.font='15px system-ui,sans-serif'; String(text||'').split('\n').filter(Boolean).slice(0,10).forEach((l,i)=>g.fillText(l.slice(0,52),22,96+i*25)); }
+  else { g.strokeStyle='#cfd8d3'; for(let x=20;x<=460;x+=88){ g.beginPath(); g.moveTo(x,80); g.lineTo(x,340); g.stroke(); } for(let y=80;y<=340;y+=26){ g.beginPath(); g.moveTo(20,y); g.lineTo(460,y); g.stroke(); }
+    g.fillStyle='#33334a'; g.font='13px system-ui,sans-serif'; String(text||'').split('\n').slice(0,10).forEach((l,i)=>l.split(' ').slice(0,5).forEach((cell,j)=>g.fillText(cell.slice(0,11),25+j*88,98+i*26))); }
+  return await new Promise(r=>c.toBlob(r,'image/jpeg',0.85));
+}
+
+
+/* ---------- events ---------- */
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('button,[data-open]'); if(!t) return;
+  const d=t.dataset;
+  if(t.id==='toastAct'){ const fn=toast.fn; $('#toast').hidden=true; toast.fn=null; if(fn) fn(); return; }
+  if(S.panel==='scan' && t.id!=='pClose' && scanClick(t.id,t)) return;
+  if(t.id==='pClose' && S.panel==='scan'){ S.scan=null; closePanel(); return; }
+  if(t.id==='scanBtn'){ $('#scanInput').click(); return; }
+  if(t.id==='recentAll'){ S.sort='up_desc'; renderGrid(); $('#filesSec').scrollIntoView({behavior:'smooth',block:'start'}); return; }
+  if(d.nav){ const k=d.nav;
+    if(k==='home'){ S.view='all'; S.year='all'; render(); window.scrollTo({top:0,behavior:'smooth'}); setNav('home'); }
+    else if(k==='files'){ S.view='all'; render(); $('#filesSec').scrollIntoView({behavior:'smooth',block:'start'}); setNav('files'); }
+    else if(k==='scan') $('#scanInput').click();
+    else if(k==='alerts'){ S.view='alert'; S.year='all'; render(); $('#filesSec').scrollIntoView({behavior:'smooth',block:'start'}); setNav('alerts'); }
+    else if(k==='more'){ showPanel('settings'); renderSettings(); }
+    return; }
+  if(t.id==='photosBtn'){ delete $('#photosInput').dataset.add; $('#photosInput').click(); return; }
+  if(t.id==='bulkPdf'){ const pics=S.files.filter(x=>S.sel.has(x.id)&&x.type?.startsWith('image/'));
+    if(!pics.length){ toast('Select photos or screenshots to combine'); return; }
+    toast('Opening the photos…',0); const blobs=[];
+    for(const f of pics){ try{ blobs.push(new File([await P.getBlob(f.asset)],(f.folder==='screenshots'?'screenshot_':'')+f.name,{type:f.type})); }catch{} }
+    $('#toast').hidden=true; S.sel.clear(); renderGrid(); scanStart(blobs,{origIds:pics.map(f=>f.id),label:'Combined'}); return; }
+  if(d.master){ S.master=d.master; S.sel.clear(); S.ai=null; if(S.master!=='all'){ S.upMaster=S.master; try{localStorage.setItem('fs_upMaster',S.upMaster);}catch{} } render(); return; }
+  if(d.view){ S.view=d.view; S.year='all'; S.confirmEmpty=false; render(); return; }
+  if(d.year){ S.year=d.year; renderGrid(); return; }
+  if(d.retry){ const it=S.queue[+d.retry]; if(it){ it.state='wait'; it.msg='Waiting'; it.retry=false; renderQueue(); pump(); } return; }
+  if(d.pick){ S.sel.has(d.pick)?S.sel.delete(d.pick):S.sel.add(d.pick); renderGrid(); return; }
+  if(d.star){ const f=S.files.find(x=>x.id===d.star); if(f&&S.col) S.col.doc(f.id).update({star:!f.star}).catch(()=>toast('Could not save')); return; }
+  if(d.open){ openFile(d.open); return; }
+  if(d.msave){ const v=document.querySelector(`[data-mname="${CSS.escape(d.msave)}"]`).value.trim(); if(!v) return;
+    if(masters().some(m=>m.id!==d.msave&&m.name.toLowerCase()===v.toLowerCase())){ toast('Another master folder already has that name'); return; }
+    try{ if(d.msave==='general') await saveSettings({generalName:v}); else await saveSettings({masters:S.settings.masters.map(m=>m.id===d.msave?{...m,name:v}:m)}); toast('Renamed'); }catch{ toast('Could not save'); } return; }
+  if(d.mdel){ S.confirmM=d.mdel; S.confirmF=null; renderManage(); return; }
+  if(d.mdelno){ S.confirmM=null; S.confirmF=null; renderManage(); return; }
+  if(d.mdelyes){ const id=d.mdelyes; try{ for(const f of S.files.filter(f=>f.master===id)) await S.col.doc(f.id).update({master:'general'});
+      await saveSettings({masters:S.settings.masters.filter(m=>m.id!==id)}); if(S.master===id) S.master='all'; S.confirmM=null; toast('Master folder removed'); }catch{ toast('Could not remove it'); } return; }
+  if(d.fsave){ const v=document.querySelector(`[data-fname="${CSS.escape(d.fsave)}"]`).value.trim(); if(!v) return;
+    if(allFolders().some(c=>c.id!==d.fsave&&c.name.toLowerCase()===v.toLowerCase())){ toast('Another sub-folder already has that name'); return; }
+    try{ await saveSettings({folders:S.settings.folders.map(c=>c.id===d.fsave?{...c,name:v}:c)}); toast('Renamed'); }catch{ toast('Could not save'); } return; }
+  if(d.fdel){ S.confirmF=d.fdel; S.confirmM=null; renderManage(); return; }
+  if(d.fdelyes){ const id=d.fdelyes; try{ for(const f of S.files.filter(f=>f.folder===id)) await S.col.doc(f.id).update({folder:'others'});
+      await saveSettings({folders:S.settings.folders.filter(c=>c.id!==id)}); if(S.view===id) S.view='all'; S.confirmF=null; toast('Sub-folder removed'); }catch{ toast('Could not remove it'); } return; }
+  const f=S.files.find(x=>x.id===S.open);
+  switch(t.id){
+    case 'pickBtn': $('#pickFiles').click(); break;
+    case 'clearQ': S.queue=S.queue.filter(i=>i.state==='work'||i.state==='wait'); renderQueue(); break;
+    case 'zipAll': zipList(S.files,'All','full'); break;
+    case 'shareAll': openShare(S.files,'All files','full'); break;
+    case 'zipView': zipList(visible().list,viewShareLabel(),viewMode()); break;
+    case 'shareView': openShare(visible().list,viewShareLabel(),viewMode()); break;
+    case 'bulkZip': zipList(S.files.filter(x=>S.sel.has(x.id)),'Selected','full'); break;
+    case 'bulkShare': openShare(S.files.filter(x=>S.sel.has(x.id)),'Selected files','full'); break;
+    case 'bulkTrash': { const restoreMode=S.view==='trash'; const ids=[], at=new Date().toISOString();
+      for(const id of [...S.sel]){ try{ await S.col.doc(id).update({trashedAt:restoreMode?null:at}); ids.push(id); }catch{} }
+      S.sel.clear(); render();
+      if(restoreMode) toast(`Restored ${plural(ids.length,'file')}`);
+      else toastAction(`Moved ${plural(ids.length,'file')} to the recycle bin.`,'Undo',async()=>{ for(const id of ids) try{ await S.col.doc(id).update({trashedAt:null}); }catch{} toast('Restored'); });
+      break; }
+    case 'bulkClear': S.sel.clear(); renderGrid(); break;
+    case 'aiSearch': aiSearch(); break;
+    case 'aiClear': S.ai=null; renderGrid(); break;
+    case 'manageBtn': S.confirmM=S.confirmF=null; showPanel('manage'); renderManage(); break;
+    case 'settingsBtn': showPanel('settings'); renderSettings(); break;
+    case 'installBtn': if(P.install) P.install().then(ok=>{ if(ok) $('#installBtn').hidden=true; }); break;
+    case 'backupBtn': backup(); break;
+    case 'restoreBtn': $('#restoreFile').click(); break;
+    case 'pClose': requestClose(); break;
+    case 'pClose2': closePanel(); break;
+    case 'restoreGo': restoreRun(); break;
+    case 'gdSave': if(await saveFile()) closePanel(); break;
+    case 'gdDiscard': closePanel(); break;
+    case 'gdKeep': $('#dGuard').hidden=true; break;
+    case 'dReload': S.dirty=false; renderFile(); break;
+    case 'dViewer': if(f) openViewer(f); break;
+    case 'vMore': renderViewerPages(10); break;
+    case 'vBack': { const id=S.viewerFile; if(S.viewer){ try{ S.viewer.destroy(); }catch{} S.viewer=null; } S.open=id; S.panel='file'; S.dirty=false; renderFile(); break; }
+    case 'dSave': saveFile(); break;
+    case 'dDl': if(f) try{ await saveBlob(f.name,await P.getBlob(f.asset)); }catch{ toast('The file could not be loaded'); } break;
+    case 'dShare': if(f) openShare([f],f.title||f.name,'year'); break;
+    case 'dRe': if(f) reanalyze(f); break;
+    case 'dOk': if(f){ try{ await S.col.doc(f.id).update({needsReview:false}); toast('Marked as checked'); }catch{ toast('Could not save'); } } break;
+    case 'dSnooze': if(f){ const on=snoozed(f); try{ await S.col.doc(f.id).update({snoozeUntil:on?null:isoOf(new Date(Date.now()+7*864e5))}); toast(on?'Reminder is back on':'Reminder snoozed for a week'); }catch{ toast('Could not save'); } } break;
+    case 'vZoomIn': case 'vZoomOut': { S.vZoom=Math.max(1,Math.min(3,(S.vZoom||1)+(t.id==='vZoomIn'?0.5:-0.5))); $('#pdfPages').querySelectorAll('canvas').forEach(c=>c.style.width=(S.vZoom*100)+'%'); $('#vZoomLbl').textContent=Math.round(S.vZoom*100)+'%'; break; }
+    case 'dAlert': if(f){ try{ await S.col.doc(f.id).update({alertDone:!f.alertDone}); toast(f.alertDone?'Reminder is back on':'Reminder marked as done'); }catch{ toast('Could not save'); } } break;
+    case 'dTrash': if(f){ try{ await S.col.doc(f.id).update({trashedAt:new Date().toISOString()}); S.dirty=false; closePanel(); const id=f.id;
+      toastAction('Moved to the recycle bin.','Undo',async()=>{ try{ await S.col.doc(id).update({trashedAt:null}); toast('Restored'); }catch{ toast('Could not restore it'); } }); }catch{ toast('Could not move it'); } } break;
+    case 'dRestore': if(f){ try{ await S.col.doc(f.id).update({trashedAt:null}); toast('Restored'); }catch{ toast('Could not restore it'); } } break;
+    case 'dDel': S.confirmDel=true; renderFile(); break;
+    case 'dDelNo': S.confirmDel=false; renderFile(); break;
+    case 'dDelYes': if(f){ try{ await hardDelete(f); closePanel(); toast('Deleted for good'); refreshUsage(); }catch{ toast('Could not delete it'); } } break;
+    case 'emptyBin': S.confirmEmpty=true; renderGrid(); break;
+    case 'emptyNo': S.confirmEmpty=false; renderGrid(); break;
+    case 'emptyYes': { S.confirmEmpty=false; if(S.view!=='trash') break; const list=visible().list.filter(x=>x.trashedAt); let n=0; for(const x of list){ try{ await hardDelete(x); n++; }catch{} } toast(`Deleted ${plural(n,'file')} for good`); refreshUsage(); break; }
+    case 'shSave': doShareSave(); break;
+    case 'shCopy': { const txt=$('#shMsg').value; try{ await navigator.clipboard.writeText(txt); toast('Message copied'); }catch{ $('#shMsg').select(); toast('Text selected. Press Ctrl+C to copy.'); } break; }
+    default: if(P.onClick) P.onClick(t.id,{toast,renderSettings,S});
+  }
+});
+window.FS_CORE={setSample(s,imgOK){ S.sample=s; S.imgOK=!!imgOK; render(); }, toast,
+  pathParts:(f,st)=>{
+    st=st||S.settings;
+    const ms=[{id:'general',name:st.generalName||'Personal'},...(st.masters||[])], fs=[...CATS,...(st.folders||[])];
+    const m=ms.find(x=>x.id===(f.master||'general'))||ms[0], c=fs.find(x=>x.id===f.folder)||{name:'Others'};
+    return [cleanDir(m.name),cleanDir(c.name),f.date?f.date.slice(0,4):'Undated'];
+  },
+  refreshSettings(){ if(S.panel==='settings') renderSettings(); }, refreshUsage};
+document.addEventListener('input',e=>{
+  if(e.target.id==='shMsg' && S.share){ S.share.msg=e.target.value; const L=shareLinks(S.share.msg,S.share.label);
+    $('#lnkWa').href=L.wa; $('#lnkGm').href=L.gm; $('#lnkOl').href=L.ol; }
+});
+$('#scrim').addEventListener('click',requestClose);
+document.addEventListener('keydown',e=>{
+  if(!S.panel) return;
+  if(e.key==='Escape'){ e.preventDefault(); requestClose(); return; }
+  if(e.key==='Tab'){ const els=[...$('#drawer').querySelectorAll('button,a[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled&&x.offsetParent!==null);
+    if(!els.length) return; const first=els[0], last=els[els.length-1];
+    if(!$('#drawer').contains(document.activeElement)){ e.preventDefault(); first.focus(); }
+    else if(e.shiftKey&&document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey&&document.activeElement===last){ e.preventDefault(); first.focus(); } }
+});
+document.addEventListener('input',e=>{ if(S.panel==='file' && e.target.closest?.('#dForm')) S.dirty=true; });
+document.addEventListener('change',e=>{ if(S.panel==='file' && e.target.closest?.('#dForm')) S.dirty=true; });
+document.addEventListener('change',e=>{ if(e.target.name==='engine'){ try{ localStorage.setItem('fs_engine',e.target.value); }catch{} toast(e.target.value==='claude'?'New files will be read by Claude AI':'New files will be read on this device'); render(); if(S.panel==='settings') renderSettings(); } });
+document.addEventListener('submit',async e=>{
+  e.preventDefault(); const id=e.target.id;
+  if(id==='dForm'){ saveFile(); return; }
+  if(id==='newMaster'||id==='newMaster2'){ const inp=$(id==='newMaster'?'#newMasterName':'#newMasterName2'); if(await addMaster(inp.value)) inp.value=''; return; }
+  if(id==='newFold'){
+    const name=$('#newFoldName').value.trim(); if(!name||!S.col) return;
+    if(allFolders().some(c=>c.name.toLowerCase()===name.toLowerCase())){ toast('That sub-folder already exists'); return; }
+    try{ await saveSettings({folders:[...(S.settings.folders||[]),{id:'c_'+(slug(name).toLowerCase().slice(0,20)||'x')+'_'+Date.now().toString(36).slice(-4),name,h:Math.floor(Math.random()*360)}]}); $('#newFoldName').value=''; toast('Sub-folder created: '+name); }catch{ toast('Could not create the sub-folder'); }
+  }
+});
+$('#upMaster').addEventListener('change',e=>{
+  const v=e.target.value, inp=$('#upMasterNew');
+  if(v==='__new'){ inp.hidden=false; inp.focus(); return; }
+  inp.hidden=true; S.upMaster=v; try{ localStorage.setItem('fs_upMaster',v); }catch{}
+});
+$('#upMasterNew').addEventListener('keydown',async e=>{
+  if(e.key!=='Enter') return; e.preventDefault(); const mid=await addMaster(e.target.value);
+  if(mid){ S.upMaster=mid; try{ localStorage.setItem('fs_upMaster',mid); }catch{} e.target.value=''; e.target.hidden=true; renderUpMaster(); }
+});
+$('#bulkMove').addEventListener('change',async e=>{
+  const to=e.target.value; if(!to) return; let n=0;
+  for(const id of [...S.sel]){ const f=S.files.find(x=>x.id===id); if(!f) continue; try{ await S.col.doc(id).update({folder:to,name:uniqueName(f.name,to,id)}); n++; }catch{} }
+  S.sel.clear(); toast(`Moved ${plural(n,'file')} to ${catOf(to).name}`); render();
+});
+$('#bulkMaster').addEventListener('change',async e=>{
+  const to=e.target.value; if(!to) return; let n=0;
+  for(const id of [...S.sel]){ try{ await S.col.doc(id).update({master:to}); n++; }catch{} }
+  S.sel.clear(); toast(`Moved ${plural(n,'file')} to ${masterOf(to).name}`); render();
+});
+let qT; $('#q').addEventListener('input',e=>{ clearTimeout(qT); qT=setTimeout(()=>{ S.q=e.target.value.trim(); if(!S.q) S.qSort='relevance'; if(S.ai&&S.ai.q!==S.q) S.ai=null; renderGrid(); },120); });
+$('#q').addEventListener('keydown',e=>{ if(e.key==='Enter' && S.sample && S.q && !visible().list.length) aiSearch(); });
+$('#sort').addEventListener('change',e=>{ if(S.q) S.qSort=e.target.value; else S.sort=e.target.value==='relevance'?'date_desc':e.target.value; renderGrid(); });
+$('#useAI').addEventListener('change',e=>{ S.useAI=e.target.checked; try{ localStorage.setItem('fs_useAI',S.useAI?'1':'0'); }catch{} toast(S.useAI?'New files will be read by AI':'AI is off. New files are named from their file name and date.'); });
+$('#pickFiles').addEventListener('change',e=>{ enqueue(e.target.files); e.target.value=''; });
+$('#scanInput').addEventListener('change',e=>{ const fs=[...e.target.files]; e.target.value=''; if(!fs.length) return; if(S.scan) scanAdd(fs); else scanStart(fs,{label:'Scan'}); });
+$('#photosInput').addEventListener('change',e=>{ const fs=[...e.target.files]; const add=e.target.dataset.add; e.target.value=''; delete e.target.dataset.add; if(!fs.length) return; if(add&&S.scan) scanAdd(fs); else scanStart(fs,{label:'Photos'}); });
+$('#restoreFile').addEventListener('change',e=>{ const f=e.target.files[0]; e.target.value=''; if(f){ closePanel(); restorePreview(f); } });
+const tray=$('#tray');
+['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{ if(e.dataTransfer?.types?.includes('Files')){ e.preventDefault(); tray.classList.add('drag'); } }));
+['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{ if(ev==='dragleave'&&e.relatedTarget) return; tray.classList.remove('drag'); }));
+document.addEventListener('drop',e=>{ if(e.dataTransfer?.files?.length){ e.preventDefault(); enqueue(e.dataTransfer.files); } });
+document.addEventListener('paste',e=>{
+  const items=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file'); if(!items.length) return;
+  const files=items.map(i=>i.getAsFile()).filter(Boolean)
+    .map((f,i)=>f.name&&f.name!=='image.png'?f:new File([f],`Screenshot_${todayISO()}_${Date.now().toString().slice(-5)}${i}.png`,{type:f.type||'image/png',lastModified:Date.now()}));
+  if(files.length){ e.preventDefault(); enqueue(files); }
+});
+})();
+
+</script>
+</body>
+</html>

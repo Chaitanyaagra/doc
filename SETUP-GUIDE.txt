@@ -1,0 +1,114 @@
+FileSaathi - setup guide (GitHub + Google Drive sync)
+=====================================================
+
+Total time: about 15 minutes, one time only. Everything here is free.
+Replace USERNAME below with your GitHub username.
+
+
+A. PUT THE APP ON GITHUB (5 minutes)
+------------------------------------
+1. Go to https://github.com and sign in (or create a free account).
+2. Top right "+" > "New repository".
+     Repository name:  filesaathi
+     Visibility:       Public   (needed for free GitHub Pages; only app code
+                                 goes here, never your documents)
+   Press "Create repository".
+3. On the new page, click the link "uploading an existing file".
+4. Unzip FileSaathi-App.zip on your computer. Open the "FileSaathi" folder,
+   select EVERYTHING inside it (index.html, config.js, sw.js,
+   manifest.webmanifest, the icons folder, the .txt files) and drag it onto
+   the GitHub page. Wait for all files to show, then press
+   "Commit changes".
+   Check: the repository must show index.html at the top level, not inside
+   another folder.
+5. Open the repository's "Settings" tab > "Pages" (left menu).
+     Source: Deploy from a branch
+     Branch: main   Folder: / (root)   > Save
+6. Wait 1-2 minutes and refresh. Your app link appears:
+     https://USERNAME.github.io/filesaathi/
+   Open it to check it works.
+
+
+B. CREATE THE GOOGLE CLIENT ID (8 minutes)
+------------------------------------------
+This tells Google that your FileSaathi is allowed to ask for access to a
+FileSaathi folder in your Drive. Google's screens change name sometimes;
+look for the same words.
+
+1. Go to https://console.cloud.google.com and sign in with the Google account
+   whose Drive you want to use.
+2. At the top, open the project list > "New project". Name: FileSaathi >
+   Create. Make sure the new project is selected at the top.
+3. Search bar at the top: type "Google Drive API" > open it > "Enable".
+4. Left menu (or search): "Google Auth Platform" / "OAuth consent screen" >
+   "Get started":
+     App name:            FileSaathi
+     User support email:  your Gmail
+     Audience:            External
+     Contact email:       your Gmail
+   Agree and press "Create".
+5. Open "Audience" > "Test users" > "Add users" > add your Gmail address,
+   and the Gmail of anyone in your family who will use the same app on
+   their phone > Save.
+   (FileSaathi only asks for the "drive.file" permission, the narrowest
+   Drive permission Google has.)
+6. Open "Clients" (or "Credentials" > "Create credentials" >
+   "OAuth client ID"):
+     Application type:               Web application
+     Name:                           FileSaathi
+     Authorized JavaScript origins:  https://USERNAME.github.io
+                                     (exactly this: https, no "/filesaathi",
+                                     no slash at the end)
+   Press "Create".
+7. Copy the "Client ID". It ends with .apps.googleusercontent.com
+   (You do NOT need the "Client secret". Ignore it.)
+
+
+C. CONNECT THE APP TO DRIVE (2 minutes)
+---------------------------------------
+1. On GitHub, open your filesaathi repository > click config.js > pencil
+   icon (Edit).
+2. Paste the Client ID between the quotes:
+     googleClientId: "1234567890-abc123.apps.googleusercontent.com"
+   Press "Commit changes". Wait 1 minute for GitHub Pages to update.
+3. Open https://USERNAME.github.io/filesaathi/ > press "Connect Google
+   Drive" at the top > choose your Google account > Continue.
+   Google may show "Google hasn't verified this app": this is normal for
+   your own private app. Press "Continue".
+4. Done. A "FileSaathi" folder appears in your Google Drive, with your files
+   sorted as Master folder / Sub-folder / Year / file.
+
+
+D. INSTALL ON YOUR PHONE AND OTHER DEVICES
+------------------------------------------
+Open https://USERNAME.github.io/filesaathi/ on each device:
+  - Android (Chrome):  "Install app" button at the top, or menu > Install.
+  - iPhone (Safari):   Share button > "Add to Home Screen".
+  - Computer (Chrome/Edge): install icon in the address bar.
+Then press "Connect Google Drive" once on that device. The same files appear
+everywhere and stay in sync.
+
+Sign-in lasts about an hour at a time. When the top button says
+"Reconnect Drive", tap it; it takes a second and no password is needed.
+
+
+E. AI READING AND RENAMING (optional)
+-------------------------------------
+Settings > Document reading > paste a Claude API key from
+https://console.anthropic.com (usage is billed by Anthropic). Enter it on
+each device. Never put this key in config.js or anywhere on GitHub.
+
+
+F. GOOD TO KNOW
+---------------
+- Your documents go only to your device and your Google Drive. GitHub only
+  serves the app.
+- Do not rename or delete the file "FileSaathi-index.json" or the
+  "_app-data" folder in Drive: they hold your names, folders and dates.
+- Deleting a file in FileSaathi (from the recycle bin) moves it to Google
+  Drive's Trash, where Google keeps it for 30 days.
+- To update the app later, upload the new files to the same repository
+  ("Add file" > "Upload files"). Every device picks up the new version.
+- Problems? "This web address is not allowed": check step B6 (origin must
+  be exactly https://USERNAME.github.io). "Access blocked / not a test
+  user": add that Gmail in step B5.
