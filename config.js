@@ -4,5 +4,5 @@
 // A Client ID is not a password, so it is safe to keep here on GitHub.
 // NEVER put your Claude API key in this file. Enter that in the app's Settings instead.
 window.FS_CONFIG = {
-  googleClientId: ""
+  googleClientId: "543831182068-a1s66g4cj0oq95cul7dc4orjll0ek8rh.apps.googleusercontent.com"
 };
