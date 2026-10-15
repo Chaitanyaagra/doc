@@ -1,29 +1,92 @@
 {
-  "name": "FileSaathi",
+  "name": "FileSaathi - Document Vault",
   "short_name": "FileSaathi",
-  "description": "Your private document vault",
+  "description": "Private document vault for Indian families. Scan or add bills, IDs and certificates; FileSaathi names, dates and files them into folders, reminds you of due and expiry dates, and syncs with your Google Drive.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#141238",
-  "theme_color": "#141238",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "background_color": "#F4F5F7",
+  "theme_color": "#14213D",
+  "categories": [
+    "productivity",
+    "utilities",
+    "business"
+  ],
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "icons": [
     {
       "src": "icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "icons/icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "icons/screens/wide.png",
+      "sizes": "1366x900",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "All your documents, named and filed"
+    },
+    {
+      "src": "icons/screens/narrow.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Reminders, recent documents and Scan on your phone"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Reminders",
+      "short_name": "Reminders",
+      "url": "./?view=alert",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "To review",
+      "short_name": "To review",
+      "url": "./?view=review",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
   "share_target": {
@@ -42,11 +105,15 @@
             "text/plain",
             "text/csv",
             "application/json",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             ".pdf",
             ".jpg",
             ".jpeg",
             ".png",
-            ".webp"
+            ".webp",
+            ".docx",
+            ".xlsx"
           ]
         }
       ]

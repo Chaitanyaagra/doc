@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>FileSaathi</title>
 <meta name="description" content="Your private document vault: smart renaming, master folders, typo-tolerant search, sharing and ZIP downloads.">
-<meta name="theme-color" content="#141238">
+<meta name="theme-color" content="#14213D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="FileSaathi">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -259,7 +259,7 @@ a.btn.wa{color:#fff}
   .side{position:static;max-height:none;overflow:visible;gap:6px;padding:0;background:transparent;border:0}
   .rail{flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:4px}
   .side h3{margin:2px 2px 0}
-  .side h3.hideM,.meter,.newfold{display:none}
+  .side h3.hideM,.meter,.side .newfold{display:none}
   .fold{width:auto;white-space:nowrap;border:1px solid var(--line);background:var(--surface);flex:none}
   .mrail .fold.on{box-shadow:none;border-color:var(--ink)}
   .grid{grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px}
@@ -306,6 +306,7 @@ a.btn.wa{color:#fff}
         </div>
         <div><h1>File<b>Saathi</b></h1><small>Private document vault for Indian families</small></div>
       </div>
+      <button class="bbtn" id="devChip" hidden></button>
       <button class="bbtn" id="syncChip" hidden></button>
       <button class="bbtn" id="installBtn" hidden>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7m0 0-3-3m3 3 3-3"/></svg>
@@ -343,6 +344,11 @@ a.btn.wa{color:#fff}
 </header>
 
 <div class="wrap gut">
+  <div id="installBar" hidden style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)">
+    <img src="icons/icon-192.png" alt="" width="40" height="40" style="border-radius:10px;flex:none">
+    <div style="flex:1 1 200px;min-width:0"><b style="display:block">Install FileSaathi on this device</b><span style="color:var(--muted);font-size:.86rem">Opens like a normal app from your Home Screen, and works offline.</span></div>
+    <button class="btn primary" id="installBar2">Install app</button><button class="btn ghost sm" id="installBarX" aria-label="Not now">Not now</button>
+  </div>
   <div class="banner" id="banner" hidden></div>
   <div class="layout">
     <aside class="side" aria-label="Folders">
@@ -370,7 +376,10 @@ a.btn.wa{color:#fff}
           <label for="upMaster">Save into master folder
             <select id="upMaster"></select>
           </label>
-          <input id="upMasterNew" placeholder="New master folder name" maxlength="40" hidden aria-label="New master folder name">
+          <span id="upMasterNewWrap" hidden style="display:inline-flex;gap:6px;align-items:flex-end">
+            <input id="upMasterNew" placeholder="New master folder name" maxlength="40" aria-label="New master folder name" enterkeyhint="done">
+            <button class="btn primary" id="upMasterAdd" type="button">Add</button>
+          </span>
           <input type="file" id="pickFiles" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.txt,.csv,.json,.md" hidden>
           <button class="btn primary" id="pickBtn">Choose files</button>
           <button class="btn" id="scanBtn" title="Take photos of a document; they are straightened and saved as one PDF">
@@ -474,14 +483,25 @@ function emit(){ clearTimeout(emitT); emitT=setTimeout(async()=>{ const vals=(aw
 const keepSync=c=>{ const o={}; if(c) SYNC_KEYS.forEach(k=>{ if(c[k]!=null) o[k]=c[k]; }); return o; };
 const col={
   doc:id=>({
-    set:async d=>{ const c=await idb.get('docs',id); await idb.put('docs',id,{...d,...keepSync(c),__id:id,updatedAt:Date.now()}); emit(); Sync.soon(); },
-    update:async p=>{ const c=await idb.get('docs',id); if(!c||c.deleted) throw {code:'not_found'}; await idb.put('docs',id,{...c,...p,__id:id,updatedAt:Date.now()}); emit(); Sync.soon(); },
-    delete:async()=>{ const c=await idb.get('docs',id); await idb.put('docs',id,{__id:id,deleted:true,updatedAt:Date.now(),kind:c?.kind,asset:c?.asset||null,thumb:c?.thumb||null,...keepSync(c)}); emit(); Sync.soon(); }
+    set:async d=>{ const c=await idb.get('docs',id); await idb.put('docs',id,{...d,...keepSync(c),__id:id,updatedAt:Date.now()}); emit(); Sync.soon(); DevFolder.soon(); },
+    update:async p=>{ const c=await idb.get('docs',id); if(!c||c.deleted) throw {code:'not_found'}; await idb.put('docs',id,{...c,...p,__id:id,updatedAt:Date.now()}); emit(); Sync.soon(); DevFolder.soon(); },
+    delete:async()=>{ const c=await idb.get('docs',id); await idb.put('docs',id,{__id:id,deleted:true,updatedAt:Date.now(),kind:c?.kind,asset:c?.asset||null,thumb:c?.thumb||null,...keepSync(c)}); emit(); Sync.soon(); DevFolder.soon(); }
   }),
   onSnapshot(fn,err){ listeners.push(fn); emit(); return ()=>{}; }
 };
 
 /* ---------- Google Drive sync ---------- */
+function explainSync(code){
+  return ({auth:'Google sign-in has expired or was refused. Press Reconnect.',offline:'No internet connection. Sync will continue when you are back online.',
+    timeout:'Google Drive did not answer in time. Check your internet and press Sync now.',
+    drive_403:'Google refused access. Most often the Google Drive API is not turned on: Google Cloud → APIs & Services → Library → Google Drive API → Enable. Wait 2 minutes, then Sync now.',
+    drive_401:'Google sign-in has expired. Press Reconnect.',drive_404:'A FileSaathi file in Drive was deleted. Press Sync now to rebuild it.',
+    drive_429:'Google Drive is busy. Wait a minute and press Sync now.',drive_500:'Google Drive had a problem. Try again in a few minutes.',drive_503:'Google Drive had a problem. Try again in a few minutes.',
+    busy_other_device:'Another device was syncing at the same moment. Press Sync now.',no_client_id:'The Google Client ID is missing. Check config.js on GitHub.',
+    access_denied:'Google did not allow access. Add your Gmail under Google Cloud → Audience → Test users, then press Connect again.',
+    popup_failed_to_open:'The Google window was blocked. Allow pop-ups for this site, then press Connect again.',popup_closed:'The Google window was closed before finishing. Press Connect again.',
+    gis_blocked:'Google sign-in could not load. Check your internet, or turn off any ad blocker for this site.'}[code])||(code?'Google Drive error ('+code+'). Send this code to whoever set up FileSaathi.':'Unknown problem. Press Sync now.');
+}
 const CFG=window.FS_CONFIG||{};
 const LS={get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v); }catch{ return d; } },
   set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }, del(k){ try{ localStorage.removeItem(k); }catch{} }};
@@ -566,7 +586,7 @@ const Sync = {
     this.busy=true; this.state='syncing'; this.ui();
     try{ await this.run(); this.last=Date.now(); LS.set('fs_g_last',this.last); this.state='ok'; this.err=null; }
     catch(e){ this.err=e; this.state=e?.code==='auth'?'auth':e?.code==='offline'?'offline':'error'; }
-    this.busy=false; this.ui(); window.FS_CORE?.refreshUsage?.();
+    this.busy=false; this.ui(); window.FS_CORE?.refreshUsage?.(); DevFolder.soon();
     if(this.again){ this.again=false; setTimeout(()=>this.now(),500); }
   },
   async readVault(root){
@@ -665,6 +685,7 @@ const Sync = {
     }
     throw {code:'busy_other_device'};
   },
+  lastSignInErr:'',
   ago(){ const s=Math.round((Date.now()-this.last)/1000); return s<60?'just now':s<3600?Math.round(s/60)+' min ago':s<86400?Math.round(s/3600)+' h ago':Math.round(s/86400)+' d ago'; },
   ui(){
     const chip=document.getElementById('syncChip'); if(!chip) return;
@@ -749,6 +770,90 @@ const OCR={worker:null,loading:null,idle:null,
 const ENGINE_KEY='fs_engine';
 const getEngine=()=>{ try{ return localStorage.getItem(ENGINE_KEY)||'offline'; }catch{ return 'offline'; } };
 
+/* ---------- A real "FileSaathi" folder on this phone or computer ----------
+   Uses the browser's folder access (Chrome/Edge on Android and computers). The folder mirrors the vault:
+   FileSaathi/<Master>/<Sub-folder>/<Year>/<file>. Files dropped into FileSaathi/Add files here are imported. */
+const KV={p:null,
+  db(){ return this.p||(this.p=new Promise((res,rej)=>{ const r=indexedDB.open('filesaathi-device',1); r.onupgradeneeded=()=>r.result.createObjectStore('kv'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); })); },
+  async get(k){ const d=await this.db(); return new Promise((res,rej)=>{ const q=d.transaction('kv').objectStore('kv').get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); },
+  async set(k,v){ const d=await this.db(); return new Promise((res,rej)=>{ const t=d.transaction('kv','readwrite'); t.objectStore('kv').put(v,k); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); }); },
+  async del(k){ const d=await this.db(); return new Promise(res=>{ const t=d.transaction('kv','readwrite'); t.objectStore('kv').delete(k); t.oncomplete=()=>res(); t.onerror=()=>res(); }); }
+};
+const INBOX='Add files here', BIN='Recycle bin';
+const DevFolder={
+  supported:()=>typeof window.showDirectoryPicker==='function' && window.isSecureContext,
+  state:'off', info:null, busy:false, again:false, t:null, last:0, missing:0, err:'',
+  async handle(){ try{ return await KV.get('devdir'); }catch{ return null; } },
+  async ready(ask){
+    const h=await this.handle(); if(!h) { this.state='off'; return null; }
+    let p='denied'; try{ p=await h.queryPermission({mode:'readwrite'}); }catch{}
+    if(p!=='granted' && ask){ try{ p=await h.requestPermission({mode:'readwrite'}); }catch{} }
+    if(p!=='granted'){ this.state='perm'; this.ui(); return null; }
+    return h;
+  },
+  async choose(){
+    const picked=await window.showDirectoryPicker({id:'filesaathi',mode:'readwrite',startIn:'documents'});
+    const dir=picked.name.toLowerCase()==='filesaathi'?picked:await picked.getDirectoryHandle('FileSaathi',{create:true});
+    await KV.set('devdir',dir); await KV.set('devparent',picked.name.toLowerCase()==='filesaathi'?'':picked.name); await KV.set('devmap',{});
+    try{ const f=await (await dir.getFileHandle('About this folder.txt',{create:true})).createWritable();
+      await f.write('This folder is kept up to date by the FileSaathi app.\r\n\r\nYour documents are sorted as  Master folder / Sub-folder / Year / file.\r\nTo add files, put them in the "'+INBOX+'" folder: FileSaathi files them the next time it opens.\r\nFiles you move to the recycle bin in the app are kept in "'+BIN+'" until you delete them for good.\r\n\r\nPlease make changes in the app, not here: renaming or moving files in this folder is not copied back.\r\n'); await f.close(); }catch{}
+    this.state='ok'; this.now(); return dir;
+  },
+  async stop(){ await KV.del('devdir'); await KV.del('devmap'); this.state='off'; this.ui(); },
+  soon(){ clearTimeout(this.t); this.t=setTimeout(()=>this.now(),2500); },
+  async now(ask){
+    if(!this.supported()) return;
+    if(this.busy){ this.again=true; return; }
+    const root=await this.ready(ask); if(!root){ this.ui(); return; }
+    this.busy=true; this.state='working'; this.err=''; this.ui();
+    try{ await this.run(root); this.state='ok'; this.last=Date.now(); }
+    catch(e){ this.state=e?.name==='NotAllowedError'||e?.name==='SecurityError'?'perm':e?.name==='NotFoundError'?'gone':'error'; this.err=e?.message||String(e); }
+    this.busy=false; this.ui(); window.FS_CORE?.refreshSettings?.();
+    if(this.again){ this.again=false; this.soon(); }
+  },
+  async dirAt(root,parts,create){ let d=root; for(const p of parts) d=await d.getDirectoryHandle(p,{create}); return d; },
+  async run(root){
+    const map=(await KV.get('devmap'))||{};
+    const docs=await idb.all('docs'); const stDoc=docs.find(d=>d.__id==='settings'&&!d.deleted)||{};
+    const pp=window.FS_CORE?.pathParts; if(!pp) return;
+    const want={};
+    for(const d of docs){ if(d.deleted||d.kind!=='file') continue;
+      const dirs=d.trashedAt?[BIN]:pp(d,stDoc); want[d.__id]={dirs,name:d.name,asset:d.asset,key:dirs.join('/')+'/'+d.name+'#'+d.asset}; }
+    let changed=false;
+    // 1. remove copies that were renamed, moved, deleted or replaced
+    for(const [id,m] of Object.entries(map)){
+      const w=want[id]; if(w && w.key===m.key) continue;
+      try{ const dir=await this.dirAt(root,m.dirs,false); await dir.removeEntry(m.written);
+        for(let i=m.dirs.length;i>0;i--){ try{ await (await this.dirAt(root,m.dirs.slice(0,i-1),false)).removeEntry(m.dirs[i-1]); }catch{ break; } } }catch{}
+      delete map[id]; changed=true;
+    }
+    // 2. write new or changed files
+    let n=0; this.missing=0;
+    for(const [id,w] of Object.entries(want)){
+      if(map[id]) continue;
+      let blob; try{ blob=await window.FS_PLATFORM.getBlob(w.asset); }catch{ this.missing++; continue; }
+      const dir=await this.dirAt(root,w.dirs,true);
+      let name=w.name, k=2; const used=new Set(Object.values(map).filter(m=>m.dirs.join('/')===w.dirs.join('/')).map(m=>m.written.toLowerCase()));
+      while(used.has(name.toLowerCase())){ const i=w.name.lastIndexOf('.'); name=(i>0?w.name.slice(0,i):w.name)+`_(${k++})`+(i>0?w.name.slice(i):''); }
+      const fw=await (await dir.getFileHandle(name,{create:true})).createWritable(); await fw.write(blob); await fw.close();
+      map[id]={dirs:w.dirs,written:name,key:w.key}; changed=true;
+      if(++n%5===0){ await KV.set('devmap',map); this.info={files:Object.keys(map).length}; this.ui(); }
+    }
+    if(changed) await KV.set('devmap',map);
+    this.info={files:Object.keys(map).length};
+    // 3. import anything put into "Add files here"
+    const inbox=await root.getDirectoryHandle(INBOX,{create:true}); const add=[];
+    for await (const [nm,h] of inbox.entries()){ if(h.kind!=='file'||nm.startsWith('.')) continue;
+      try{ const f=await h.getFile(); add.push({file:new File([f],nm,{type:f.type,lastModified:f.lastModified}),ack:()=>inbox.removeEntry(nm)}); }catch{} }
+    if(add.length && window.FS_CORE?.enqueue){ window.FS_CORE.toast(`Adding ${add.length} ${add.length===1?'file':'files'} from your FileSaathi folder`); window.FS_CORE.enqueue(add); }
+  },
+  ui(){
+    const chip=document.getElementById('devChip'); if(!chip) return;
+    chip.hidden=this.state!=='perm'&&this.state!=='gone';
+    chip.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z"/></svg> '+(this.state==='gone'?'Device folder missing':'Allow device folder');
+  }
+};
+
 let installEvt=null, installCb=null;
 window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; installCb&&installCb(); });
 const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
@@ -792,7 +897,7 @@ window.FS_PLATFORM = {
     try{ await openDB(); }catch{ return {error:'Local storage is blocked in this browser window (private mode?). Open FileSaathi in a normal window.'}; }
     try{ await navigator.storage?.persist?.(); }catch{}
     const key=getKey();
-    Sync.ui(); setTimeout(()=>Sync.now(),1500);
+    Sync.ui(); setTimeout(()=>Sync.now(),1500); setTimeout(()=>DevFolder.now(),2200);
     return {col,assets,dl,sample:key?sample:null,imgOK:true,
       warn: location.protocol==='file:' ? 'Opened as a local file. Everything works, but installing the app and sharing from WhatsApp need FileSaathi to be opened from a web address (see README).' : null};
   },
@@ -805,12 +910,39 @@ window.FS_PLATFORM = {
     await idb.put('blobs',id,b); return b;
   },
   async srcFor(id){ if(urls.has(id)) return urls.get(id); let b; try{ b=await this.getBlob(id); }catch{ return ''; } const u=URL.createObjectURL(b); urls.set(id,u); return u; },
+  folderSettings(){
+    const ua=navigator.userAgent, ios=/iPad|iPhone|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1);
+    if(!DevFolder.supported()) return `<p>${ios?'iPhone and iPad do not let web apps create folders on the device.':'This browser cannot create folders on the device.'} You can still keep a copy: use <b>Download all</b> to save a ZIP${ios?' into the Files app':''}, or connect Google Drive${ios?' and open the files from the Drive app':''}.${ios?'':' Chrome or Edge can do this.'}</p>`;
+    const st=DevFolder.state, n=DevFolder.info?.files;
+    const status={off:'Not set up. Your files are kept inside the app only.',working:`Updating the folder…${n!=null?' '+n+' files so far.':''}`,
+      ok:`Saving to <b>${'FileSaathi'}</b> on this device${n!=null?' · '+n+' '+(n===1?'file':'files'):''}${DevFolder.last?' · updated '+Math.max(0,Math.round((Date.now()-DevFolder.last)/60000))+' min ago':''}.${DevFolder.missing?` ${DevFolder.missing} not on this device yet (they come from Google Drive).`:''}`,
+      perm:'FileSaathi needs your permission again to write to the folder. Press Allow.',gone:'The FileSaathi folder was moved or deleted. Choose the folder again.',
+      error:`The last update failed (${(DevFolder.err||'error').replace(/[<>&]/g,'')}). Press Update now.`}[st]||'';
+    return `<p>Keeps a real <b>FileSaathi</b> folder on this ${/Android/.test(ua)?'phone':'computer'}, sorted as Master folder / Sub-folder / Year, that you can open in your file manager. Files you put in its "<b>${INBOX}</b>" folder are added to the app automatically.</p>
+      <p>${status}</p>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+        ${st==='off'||st==='gone'?'<button class="btn primary" id="devChoose">Choose where to create it</button>':st==='perm'?'<button class="btn primary" id="devAllow">Allow</button>':'<button class="btn primary" id="devNow">Update now</button><button class="btn" id="devChoose">Change location</button>'}
+        ${st!=='off'?'<button class="btn danger" id="devStop">Stop</button>':''}</div>
+      ${st==='off'||st==='gone'?`<p style="font-size:.82rem">${/Android/.test(ua)?'Pick a place such as <b>Documents</b> (Android does not allow the main Download folder or the top of the storage). FileSaathi creates its folder inside it.':'Pick a place such as <b>Documents</b>. FileSaathi creates its folder inside it.'}</p>`:''}`;
+  },
   syncSettings(){
     const cid=Sync.cid(), on=Sync.on(), email=LS.get('fs_g_email',''), root=LS.get('fs_g_root',null);
     const status=!cid?'Not set up yet.':!on?'Not connected.':!Sync.token()?`Connected${email?' as <b>'+email.replace(/[<>&]/g,'')+'</b>':''}, but the session expired. Press Reconnect.`
-      :`Connected${email?' as <b>'+email.replace(/[<>&]/g,'')+'</b>':''}. ${Sync.last?'Last synced '+Sync.ago()+'.':''}${Sync.state==='error'?' The last sync failed ('+(Sync.err?.code||'error')+').':''}`;
+      :`Connected${email?' as <b>'+email.replace(/[<>&]/g,'')+'</b>':''}. ${Sync.last?'Last synced '+Sync.ago()+'.':''}`;
+    const why=explainSync(Sync.err?.code);
+    const origin=location.origin, fileMode=location.protocol==='file:', claudeHost=/claude\.(ai|site)|claudeusercontent/.test(location.hostname);
+    const check=fileMode?'<div class="confirm">FileSaathi is open as a file from the ZIP. Google Drive only works when FileSaathi is opened from its web address (for example https://USERNAME.github.io/filesaathi/).</div>'
+      :claudeHost?'<div class="confirm">This copy runs inside Claude, which cannot connect to Google Drive. Open FileSaathi from your own web address instead.</div>'
+      :`<div style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:.86rem">
+         <b>Check in Google Cloud → Clients → FileSaathi:</b><br>
+         Authorized JavaScript origins must contain exactly:<br>
+         <code style="font-family:var(--f-mono);user-select:all;font-size:.84rem">${origin}</code>
+         <button class="btn sm" id="gCopyOrigin" style="margin-left:6px">Copy</button><br>
+         Client ID in use ends with <code style="font-family:var(--f-mono)">…${(cid||'none').slice(-34,-27)||'none'}</code> · Google Drive API must be <b>Enabled</b> · your Gmail must be under <b>Audience → Test users</b>.</div>`;
     return `<p>Your files are saved into a <b>FileSaathi</b> folder in your own Google Drive, sorted into master folders, sub-folders and years, and kept in sync on every device where you connect. FileSaathi can only see the files it created.</p>
       <p>${status}</p>
+      ${Sync.state==='error'||Sync.state==='auth'||Sync.lastSignInErr?`<div class="confirm" style="background:var(--danger-soft)"><b>Why it stopped:</b> ${Sync.lastSignInErr||why}</div>`:''}
+      ${check}
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
         <input id="gCid" value="${(cid||'').replace(/"/g,'&quot;')}" placeholder="Google OAuth Client ID (…apps.googleusercontent.com)" autocomplete="off" style="flex:1 1 260px;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);font-family:var(--f-mono);font-size:.78rem" aria-label="Google Client ID">
         <button class="btn" id="gSaveCid">Save ID</button></div>
@@ -873,18 +1005,25 @@ window.FS_PLATFORM = {
       <button class="btn primary" id="saveKey">Save &amp; test</button>${k?'<button class="btn danger" id="clearKey">Remove key</button>':''}</div>`;
   },
   async onClick(id,{toast,renderSettings}){
-    const gErr=e=>({no_client_id:'Add your Google Client ID first (Settings).',gis_blocked:'Google sign-in could not load. Check your internet connection.',
+    if(id==='devChoose'){ try{ await DevFolder.choose(); toast('FileSaathi folder created. Copying your files…',5000); }catch(e){ if(e?.name!=='AbortError') toast(e?.name==='SecurityError'?'That place is not allowed. Choose a folder such as Documents.':'The folder could not be set up ('+(e?.message||'error')+')',7000); } renderSettings(); return; }
+    if(id==='devAllow'||id==='devChip'){ await DevFolder.now(true); if(DevFolder.state==='gone'){ document.getElementById('settingsBtn').click(); } else if(DevFolder.state==='ok') toast('Folder access allowed'); renderSettings(); return; }
+    if(id==='devNow'){ await DevFolder.now(true); renderSettings(); return; }
+    if(id==='devStop'){ await DevFolder.stop(); toast('Stopped. The files already in the folder stay there.'); renderSettings(); return; }
+    const gErr=e=>{ const m=gErrMsg(e); Sync.lastSignInErr=m; return m; };
+    const gErrMsg=e=>({no_client_id:'Add your Google Client ID first (Settings).',gis_blocked:'Google sign-in could not load. Check your internet connection.',
       popup_closed:'The Google sign-in window was closed.',popup_failed_to_open:'Allow pop-ups for this site, then try again.',access_denied:'Google access was not allowed.',
-      idpiframe_initialization_failed:'This web address is not allowed in your Google Client ID. Add it under Authorized JavaScript origins.'}[e?.code]||('Google sign-in failed ('+(e?.code||'error')+')'));
+      idpiframe_initialization_failed:'This web address is not allowed in your Google Client ID. Add it under Authorized JavaScript origins.'}[e?.code]||explainSync(e?.code));
+    if(id==='gCopyOrigin'){ try{ await navigator.clipboard.writeText(location.origin); toast('Copied: '+location.origin); }catch{ toast(location.origin,8000); } return; }
     if(id==='syncChip'){
       if(!Sync.cid()||!Sync.on()){ document.getElementById('settingsBtn').click(); return; }
+      if(Sync.state==='error'){ document.getElementById('settingsBtn').click(); return; }
       if(!Sync.token()){ try{ const r=await Sync.connect(); if(r?.switched) toast(`Connected to a different Google account (${r.email}). Your files will be copied into this account's Drive.`,7000); }catch(e){ toast(gErr(e),6000); } return; }
       Sync.now(); return;
     }
     if(id==='gSaveCid'){ const v=(document.getElementById('gCid').value||'').trim();
       if(v && !/\.apps\.googleusercontent\.com$/.test(v)){ toast('That does not look like a Client ID. It ends with .apps.googleusercontent.com',6000); return; }
       LS.set('fs_g_cid',v); Sync.ui(); renderSettings(); toast(v?'Client ID saved. Now press Connect Google Drive.':'Client ID cleared'); return; }
-    if(id==='gConnect'){ try{ const r=await Sync.connect(); toast(r?.switched?`Connected to a different Google account (${r.email}). Your files will be copied into this account's Drive.`:'Google Drive connected. Syncing your files…',7000); }catch(e){ toast(gErr(e),6000); } renderSettings(); return; }
+    if(id==='gConnect'){ Sync.lastSignInErr=''; try{ const r=await Sync.connect(); toast(r?.switched?`Connected to a different Google account (${r.email}). Your files will be copied into this account's Drive.`:'Google Drive connected. Syncing your files…',7000); }catch(e){ toast(gErr(e),6000); } renderSettings(); return; }
     if(id==='gSync'){ Sync.now(); return; }
     if(id==='gOff'){ Sync.disconnect(); renderSettings(); toast('Disconnected. Your files stay on this device and in Drive.'); return; }
     if(id==='saveKey'){
@@ -936,7 +1075,7 @@ const fmtSize = b => b<1024?b+' B':b<1048576?(b/1024).toFixed(0)+' KB':b<1073741
 const validISO = s => { if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null; const [y,m,d]=s.split('-').map(Number); const t=new Date(y,m-1,d);
   return t.getFullYear()===y&&t.getMonth()===m-1&&t.getDate()===d&&y>=1900&&y<=2100 ? s : null; };
 const slug = s => String(s||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9ऀ-ॿ]+/g,'-').replace(/^-+|-+$/g,'').slice(0,48);
-const cleanDir = s => String(s).replace(/[\\/:*?"<>|&]+/g,'-').replace(/\s+/g,' ').trim();
+const cleanDir = s => String(s).replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim();
 const dotColor = h => `hsl(${h} 58% 50%)`;
 const plural = (n,w) => `${n} ${w}${n===1?'':'s'}`;
 
@@ -986,8 +1125,11 @@ function hydrate(root=document){
     if(S.panel==='manage') renderManage();
   }, err=>banner('Your files could not be loaded ('+(err?.code||'error')+'). Please reload in a moment.'));
   refreshUsage();
-  if(P.onInstallable) P.onInstallable(()=>{ $('#installBtn').hidden=false; });
+  if(P.onInstallable) P.onInstallable(()=>{ $('#installBtn').hidden=false;
+    let dismissed=false; try{ dismissed=Date.now()-(+localStorage.getItem('fs_install_x')||0)<7*864e5; }catch{}
+    if(!dismissed && matchMedia('(max-width:1024px)').matches) $('#installBar').hidden=false; });
   if(P.takeShared){ const shared=await P.takeShared(); if(shared?.length){ toast(`Received ${plural(shared.length,'file')} from another app`); enqueue(shared); } }
+  try{ const v=new URLSearchParams(location.search).get('view'); if(v&&['alert','review','all','star','month'].includes(v)){ S.view=v; render(); history.replaceState(null,'',location.pathname); } }catch{}
   if(P.backupNudge) setTimeout(()=>{ const msg=P.backupNudge(live().length); if(msg && $('#banner').hidden) banner(msg); },4000);
 })();
 async function refreshUsage(){ if(!S.assets) return; try{ S.usage=(await S.assets.list()).usage; renderMeter(); }catch{} }
@@ -1126,7 +1268,8 @@ function foldBtn(attr,id,name,n,color,on,mono){
 function renderSide(){
   const L=live();
   $('#mrail').innerHTML=foldBtn('master','all','All masters',L.length,'linear-gradient(145deg,#E9C06D,#B98425)',S.master==='all','★')
-    + masters().map(m=>foldBtn('master',m.id,m.name,L.filter(f=>mOf(f)===m.id).length,dotColor(m.h),S.master===m.id,(m.name.trim()[0]||'?').toUpperCase())).join('');
+    + masters().map(m=>foldBtn('master',m.id,m.name,L.filter(f=>mOf(f)===m.id).length,dotColor(m.h),S.master===m.id,(m.name.trim()[0]||'?').toUpperCase())).join('')
+    + `<button class="fold" id="addMasterChip" style="color:var(--ink);font-weight:600"><span class="ic" style="background:var(--sunk);color:var(--ink)">+</span><span>New master folder</span></button>`;
   const sc=S.files.filter(inScope), sl=sc.filter(f=>!f.trashedAt);
   $('#lrail').innerHTML=foldBtn('view','all','All files',sl.length,null,S.view==='all')+foldBtn('view','star','Starred',sl.filter(f=>f.star).length,null,S.view==='star')
     +foldBtn('view','alert','Expiry & due',sl.filter(isAlert).length,null,S.view==='alert')+foldBtn('view','review','To review',sl.filter(f=>f.needsReview).length,null,S.view==='review')+foldBtn('view','month','This month',sl.filter(thisMonth).length,null,S.view==='month')+foldBtn('view','undated','Undated',sl.filter(f=>!f.date).length,null,S.view==='undated')
@@ -1395,6 +1538,7 @@ function renderSettings(){
   const ai=P.aiSettings?P.aiSettings():null;
   $('#drawer').innerHTML=head('Settings')+`
   <div class="dbody">
+    ${P.folderSettings?`<div class="step"><span class="k">▣</span><div class="c"><strong>Folder on this device</strong>${P.folderSettings()}</div></div>`:''}
     ${P.syncSettings?`<div class="step"><span class="k">⟳</span><div class="c"><strong>Google Drive sync</strong>${P.syncSettings()}</div></div>`:''}
     <div class="step"><span class="k">AI</span><div class="c"><strong>Document reading</strong>${ai?ai:`<p>Built in. Files are read by Claude when you add them; the first time, you are asked to allow it.</p>`}</div></div>
     <div class="step"><span class="k">⇅</span><div class="c"><strong>Backup &amp; restore</strong>
@@ -2146,6 +2290,8 @@ document.addEventListener('click',async e=>{
   if(S.panel==='scan' && t.id!=='pClose' && scanClick(t.id,t)) return;
   if(t.id==='pClose' && S.panel==='scan'){ S.scan=null; closePanel(); return; }
   if(t.id==='scanBtn'){ $('#scanInput').click(); return; }
+  if(t.id==='upMasterAdd'){ addFromTray(); return; }
+  if(t.id==='addMasterChip'){ S.confirmM=S.confirmF=null; showPanel('manage'); renderManage(); setTimeout(()=>$('#newMasterName2')?.focus(),50); return; }
   if(t.id==='recentAll'){ S.sort='up_desc'; renderGrid(); $('#filesSec').scrollIntoView({behavior:'smooth',block:'start'}); return; }
   if(d.nav){ const k=d.nav;
     if(k==='home'){ S.view='all'; S.year='all'; render(); window.scrollTo({top:0,behavior:'smooth'}); setNav('home'); }
@@ -2201,6 +2347,8 @@ document.addEventListener('click',async e=>{
     case 'aiClear': S.ai=null; renderGrid(); break;
     case 'manageBtn': S.confirmM=S.confirmF=null; showPanel('manage'); renderManage(); break;
     case 'settingsBtn': showPanel('settings'); renderSettings(); break;
+    case 'installBarX': $('#installBar').hidden=true; try{ localStorage.setItem('fs_install_x',String(Date.now())); }catch{} break;
+    case 'installBar2': $('#installBar').hidden=true;
     case 'installBtn': if(P.install) P.install().then(ok=>{ if(ok){ $('#installBtn').hidden=true; toast('FileSaathi is being installed'); } }); break;
     case 'backupBtn': backup(); break;
     case 'restoreBtn': $('#restoreFile').click(); break;
@@ -2243,7 +2391,7 @@ window.FS_CORE={setSample(s,imgOK){ S.sample=s; S.imgOK=!!imgOK; render(); }, to
     const m=ms.find(x=>x.id===(f.master||'general'))||ms[0], c=fs.find(x=>x.id===f.folder)||{name:'Others'};
     return [cleanDir(m.name),cleanDir(c.name),f.date?f.date.slice(0,4):'Undated'];
   },
-  refreshSettings(){ if(S.panel==='settings') renderSettings(); }, refreshUsage,
+  refreshSettings(){ if(S.panel==='settings') renderSettings(); }, refreshUsage, enqueue:x=>enqueue(x),
   showInstallHelp(){ const st=P.installSteps?P.installSteps():null; if(!st) return; showPanel('install');
     $('#drawer').innerHTML=head(st.title)+`<div class="dbody">${st.steps.map((t,i)=>`<div class="step"><span class="k">${i+1}</span><div class="c"><p style="color:var(--ink);font-size:.95rem">${esc(t)}</p></div></div>`).join('')}
       <p style="margin:0;color:var(--muted);font-size:.86rem">After installing, open FileSaathi from your Home Screen. Your files stay the same.</p></div>`; }};
@@ -2275,14 +2423,17 @@ document.addEventListener('submit',async e=>{
   }
 });
 $('#upMaster').addEventListener('change',e=>{
-  const v=e.target.value, inp=$('#upMasterNew');
-  if(v==='__new'){ inp.hidden=false; inp.focus(); return; }
-  inp.hidden=true; S.upMaster=v; try{ localStorage.setItem('fs_upMaster',v); }catch{}
+  const v=e.target.value, wrap=$('#upMasterNewWrap');
+  if(v==='__new'){ wrap.hidden=false; $('#upMasterNew').focus(); return; }
+  wrap.hidden=true; S.upMaster=v; try{ localStorage.setItem('fs_upMaster',v); }catch{}
 });
-$('#upMasterNew').addEventListener('keydown',async e=>{
-  if(e.key!=='Enter') return; e.preventDefault(); const mid=await addMaster(e.target.value);
-  if(mid){ S.upMaster=mid; try{ localStorage.setItem('fs_upMaster',mid); }catch{} e.target.value=''; e.target.hidden=true; renderUpMaster(); }
-});
+async function addFromTray(){
+  const inp=$('#upMasterNew'), name=inp.value.trim();
+  if(!name){ toast('Type a name for the new master folder'); inp.focus(); return; }
+  const mid=await addMaster(name);
+  if(mid){ S.upMaster=mid; try{ localStorage.setItem('fs_upMaster',mid); }catch{} inp.value=''; $('#upMasterNewWrap').hidden=true; renderUpMaster(); }
+}
+$('#upMasterNew').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addFromTray(); } });
 $('#bulkMove').addEventListener('change',async e=>{
   const to=e.target.value; if(!to) return; let n=0;
   for(const id of [...S.sel]){ const f=S.files.find(x=>x.id===id); if(!f) continue; try{ await S.col.doc(id).update({folder:to,name:uniqueName(f.name,to,id)}); n++; }catch{} }
