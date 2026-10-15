@@ -14,13 +14,12 @@ A. PUT THE APP ON GITHUB (5 minutes)
                                  goes here, never your documents)
    Press "Create repository".
 3. On the new page, click the link "uploading an existing file".
-4. Unzip FileSaathi-App.zip on your computer. Open the "FileSaathi" folder,
-   select EVERYTHING inside it (index.html, config.js, sw.js,
-   manifest.webmanifest, the icons folder, the .txt files) and drag it onto
-   the GitHub page. Wait for all files to show, then press
-   "Commit changes".
-   Check: the repository must show index.html at the top level, not inside
-   another folder.
+4. Unzip FileSaathi-App.zip on your computer. All files are in one place,
+   with no folders inside. Select ALL of them (Ctrl+A, or Cmd+A on a Mac)
+   and drag them onto the GitHub page. Wait until every file is listed, then
+   press "Commit changes".
+   Check: the repository must show index.html, sw.js and icon-192.png at the
+   top level. (UPLOAD-KAISE-KAREIN.txt explains this step in Hindi.)
 5. Open the repository's "Settings" tab > "Pages" (left menu).
      Source: Deploy from a branch
      Branch: main   Folder: / (root)   > Save

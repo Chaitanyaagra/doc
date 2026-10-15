@@ -1,0 +1,53 @@
+UPLOAD KAISE KAREIN - zaroor padhein
+====================================
+
+Is ZIP me saari files EK HI JAGAH hain, andar koi folder nahi hai.
+Pehle "icons" aur "libs" folders upload nahi ho paate the, isliye app
+phone par install nahi hoti thi. Ab ye problem nahi hogi.
+
+
+Pehla upload (ya naya version daalna)
+-------------------------------------
+1. ZIP ko computer par EXTRACT kijiye. ZIP file khud upload mat kijiye,
+   GitHub use kholta nahi hai.
+
+2. GitHub par apni "filesaathi" repository kholiye ->
+   "Add file" -> "Upload files".
+
+3. Extract kiye folder ko kholiye. Andar ki SAARI files select kijiye
+   (Ctrl+A, Mac par Cmd+A) aur browser window me drag kar dijiye.
+   - Folder ko drag mat kijiye, folder ke ANDAR ki files drag kijiye.
+   - Purani files ko replace hone dijiye.
+
+4. Neeche "Commit changes" button ZAROOR dabaiye. Ye step chhootna sabse
+   aam galti hai. Iske bina kuch upload nahi hota.
+
+5. Pehli baar: Settings -> Pages -> "Deploy from a branch" ->
+   Branch: main, Folder: / (root) -> Save.
+
+6. 2-3 minute rukiye. Phone par apna link kholiye:
+   https://USERNAME.github.io/filesaathi/
+
+
+Kaise pata chalega ki naya version chal raha hai?
+-------------------------------------------------
+- Repository me index.html, sw.js aur icon-192.png SABSE UPAR dikhne chahiye
+  (kisi folder ke andar nahi).
+- App me Settings kholiye. Neeche "FileSaathi version 1.4.0" likha hoga.
+- Phone par upar "Install FileSaathi on this device" patti aayegi.
+
+
+Phone par install
+-----------------
+- Android: Chrome me link kholiye -> "Install app" dabaiye.
+- iPhone/iPad: Safari me link kholiye -> Share -> "Add to Home Screen".
+- WhatsApp ke andar link khula ho to pehle "Open in browser" chuniye.
+
+Install ke baad app Home Screen se khuliye. Naya version upload karne par
+app khud update ho jaati hai, kuch karna nahi padta.
+
+
+Agar phir bhi na chale
+----------------------
+Phone par Chrome -> Settings -> Site settings -> All sites -> apni site ->
+"Clear & reset", phir link dobara kholiye.

@@ -16,9 +16,11 @@ START HERE: open SETUP-GUIDE.txt. It walks you through:
 Quick try without setup: double-click index.html. It works on that computer
 only (no install, no sync) until you finish the guide.
 
-Files in this folder
+Files in this ZIP (all in one place, no sub-folders)
   index.html             the app
-  config.js              put your Google Client ID here (step C)
-  sw.js                  lets the app work offline and receive shared files
-  manifest.webmanifest   app name and icon for installing
-  icons/                 app icons
+  config.js              your Google Client ID (step C)
+  sw.js                  lets the app install, work offline and update itself
+  manifest.webmanifest   app name, icons and screenshots for installing
+  icon-*.png, favicon    app icons
+  *.min.js, *.wasm.js    built-in tools for PDFs, ZIPs and reading text offline
+  *.traineddata.gz       English and Hindi text-reading data

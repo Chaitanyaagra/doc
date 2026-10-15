@@ -7,16 +7,18 @@
 <meta name="description" content="Your private document vault: smart renaming, master folders, typo-tolerant search, sharing and ZIP downloads.">
 <meta name="theme-color" content="#14213D">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
 <meta name="apple-mobile-web-app-title" content="FileSaathi">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap">
-<script src="libs/jszip.min.js"></script>
-<script src="libs/pdf.min.js"></script>
-<script src="libs/jspdf.umd.min.js"></script>
+<script src="jszip.min.js"></script>
+<script src="pdf.min.js"></script>
+<script src="jspdf.umd.min.js"></script>
 <style>
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 img{max-width:100%}[hidden]{display:none!important}
@@ -345,11 +347,12 @@ a.btn.wa{color:#fff}
 
 <div class="wrap gut">
   <div id="installBar" hidden style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)">
-    <img src="icons/icon-192.png" alt="" width="40" height="40" style="border-radius:10px;flex:none">
+    <img src="icon-192.png" alt="" width="40" height="40" style="border-radius:10px;flex:none">
     <div style="flex:1 1 200px;min-width:0"><b style="display:block">Install FileSaathi on this device</b><span style="color:var(--muted);font-size:.86rem">Opens like a normal app from your Home Screen, and works offline.</span></div>
     <button class="btn primary" id="installBar2">Install app</button><button class="btn ghost sm" id="installBarX" aria-label="Not now">Not now</button>
   </div>
   <div class="banner" id="banner" hidden></div>
+  <div id="watchBar" hidden style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:.9rem"></div>
   <div class="layout">
     <aside class="side" aria-label="Folders">
       <h3>Master folders <button id="manageBtn" type="button">Manage</button></h3>
@@ -369,8 +372,8 @@ a.btn.wa{color:#fff}
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
         </div>
         <div class="txt">
-          <strong>Drop files here, or paste a screenshot</strong>
-          <span>Photos, PDFs, Word, Excel or text. Each file is read, renamed, dated and filed for you.</span>
+          <strong>Drop files or folders here, or paste a screenshot</strong>
+          <span>Select many files at once, or a whole folder. Each file is read, renamed, dated and filed for you.</span>
         </div>
         <div class="acts">
           <label for="upMaster">Save into master folder
@@ -382,6 +385,13 @@ a.btn.wa{color:#fff}
           </span>
           <input type="file" id="pickFiles" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.txt,.csv,.json,.md" hidden>
           <button class="btn primary" id="pickBtn">Choose files</button>
+          <button class="btn" id="watchBtn" hidden title="Let FileSaathi look after folders on this tablet, with no uploading">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2.5"/><path d="M10 18h4"/></svg>
+            Manage my tablet files</button>
+          <button class="btn" id="folderBtn" title="Add a whole folder, including the folders inside it">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z"/><path d="M12 10v6M9 13h6"/></svg>
+            Choose folder</button>
+          <input type="file" id="pickFolder" webkitdirectory directory multiple hidden>
           <button class="btn" id="scanBtn" title="Take photos of a document; they are straightened and saved as one PDF">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3.2"/></svg>
             Scan</button>
@@ -485,7 +495,7 @@ const col={
   doc:id=>({
     set:async d=>{ const c=await idb.get('docs',id); await idb.put('docs',id,{...d,...keepSync(c),__id:id,updatedAt:Date.now()}); emit(); Sync.soon(); DevFolder.soon(); },
     update:async p=>{ const c=await idb.get('docs',id); if(!c||c.deleted) throw {code:'not_found'}; await idb.put('docs',id,{...c,...p,__id:id,updatedAt:Date.now()}); emit(); Sync.soon(); DevFolder.soon(); },
-    delete:async()=>{ const c=await idb.get('docs',id); await idb.put('docs',id,{__id:id,deleted:true,updatedAt:Date.now(),kind:c?.kind,asset:c?.asset||null,thumb:c?.thumb||null,...keepSync(c)}); emit(); Sync.soon(); DevFolder.soon(); }
+    delete:async()=>{ const c=await idb.get('docs',id); await idb.put('docs',id,{__id:id,deleted:true,...(c?.localOnly?{localOnly:true}:{}),updatedAt:Date.now(),kind:c?.kind,asset:c?.asset||null,thumb:c?.thumb||null,...keepSync(c)}); emit(); Sync.soon(); DevFolder.soon(); }
   }),
   onSnapshot(fn,err){ listeners.push(fn); emit(); return ()=>{}; }
 };
@@ -635,7 +645,7 @@ const Sync = {
         }
         continue;
       }
-      if(w.kind!=='file'||!pp) continue;
+      if(w.kind!=='file'||!pp||w.localOnly) continue;   // "only on this tablet" files never go to Drive
       const parts=pp(w), want=parts.join('/')+'/'+w.name; let dirty=false;
       if(remote){
         if(w.driveId && !remote.has(w.driveId)){
@@ -672,7 +682,7 @@ const Sync = {
       const latest=await this.readVault(root); const again=this.merge(new Map((await idb.all('docs')).map(d=>[d.__id,d])),latest.docs);
       for(const [id,w] of again.out) await idb.put('docs',id,w);
       if(again.changed) emit();
-      const docs={}; for(const [id,w] of again.out){ const c={...w}; delete c.__id; docs[id]=c; }
+      const docs={}; for(const [id,w] of again.out){ if(w.localOnly) continue; const c={...w}; delete c.__id; docs[id]=c; }
       if(JSON.stringify(latest.docs)===JSON.stringify(docs)) return;
       const blob=new Blob([JSON.stringify({app:'FileSaathi',version:1,updated:new Date().toISOString(),docs})],{type:'application/json'});
       if(latest.vid){
@@ -748,14 +758,14 @@ async function callClaude(prompt,opts={},key=getKey()){
 }
 const sample={ json:(p,o)=>callClaude(p,o) };
 
-/* Offline text scanning (OCR): Tesseract with English + Hindi, all files bundled in libs/tesseract */
+/* Offline text scanning (OCR): Tesseract with English + Hindi, all files bundled next to index.html */
 const OCR={worker:null,loading:null,idle:null,
   loadScript(src){ return new Promise((res,rej)=>{ if(window.Tesseract) return res(); const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej({code:'ocr_load'}); document.head.appendChild(s); }); },
   async get(){
     if(this.worker) return this.worker;
     if(!this.loading) this.loading=(async()=>{
-      await this.loadScript('libs/tesseract/tesseract.min.js');
-      const w=await Tesseract.createWorker(['eng','hin'],1,{workerPath:'libs/tesseract/worker.min.js',corePath:'libs/tesseract/core',langPath:'libs/tesseract/lang',gzip:true,workerBlobURL:false});
+      await this.loadScript('tesseract.min.js');
+      const w=await Tesseract.createWorker(['eng','hin'],1,{workerPath:'tesseract-worker.min.js',corePath:'.',langPath:'.',gzip:true,workerBlobURL:false});
       this.worker=w; return w;
     })().catch(e=>{ this.loading=null; throw e; });
     return this.loading;
@@ -854,10 +864,146 @@ const DevFolder={
   }
 };
 
+/* ---------- Watch folders on this tablet: no uploading needed ----------
+   The person picks folders once (Documents, Screenshots, WhatsApp, Download/...). Every time the app opens
+   (or on "Check now") new files in them are copied into FileSaathi, named and filed. The original files are
+   never changed. Personal photos are left out. Each file is looked at once: a list of what was seen is kept. */
+const Watch={
+  busy:false, last:0, needPerm:false, lastFound:0,
+  supported:()=>typeof window.showDirectoryPicker==='function' && window.isSecureContext,
+  async list(){ return (await KV.get('watch'))||[]; },
+  async save(l){ await KV.set('watch',l); this.bar(); },
+  async add(){
+    const C=window.FS_CORE; let h;
+    try{ h=await window.showDirectoryPicker({id:'fs-watch',mode:'read',startIn:'documents'}); }
+    catch(e){ if(e?.name==='SecurityError') C.toast('Android does not allow that place. Choose a folder inside it, such as Documents, Download/WhatsApp or Pictures/Screenshots.',8000); return; }
+    const dev=await KV.get('devdir'); if(dev){ try{ if(await dev.isSameEntry(h)){ C.toast('That is FileSaathi\'s own folder. Choose a folder with your documents.',6000); return; } }catch{} }
+    const l=await this.list(); for(const w of l){ try{ if(await w.handle.isSameEntry(h)){ C.toast('"'+h.name+'" is already being looked after'); return; } }catch{} }
+    l.push({id:Date.now().toString(36),handle:h,name:h.name,master:'general',added:Date.now(),files:0,backup:false});
+    await this.save(l); this.render(); this.scan(false);
+  },
+  async remove(id){ const l=(await this.list()).filter(w=>w.id!==id); await this.save(l); const seen=(await KV.get('watchSeen'))||{};
+    for(const k of Object.keys(seen)) if(k.startsWith(id+'|')) delete seen[k]; await KV.set('watchSeen',seen); this.render(); },
+  pending:new Set(),
+  async setBackup(id,on){ const l=await this.list(); const w=l.find(x=>x.id===id); if(!w) return; w.backup=!!on; await this.save(l);
+    let n=0; for(const d of await idb.all('docs')){ if(d.deleted||d.watchId!==id) continue; await idb.put('docs',d.__id,{...d,localOnly:!on,updatedAt:Date.now()}); n++; }
+    emit(); Sync.soon(); window.FS_CORE?.toast?.(on?`Files from "${w.name}" will also be backed up to Google Drive`:`Files from "${w.name}" stay only on this tablet`,5000); },
+  async setMaster(id,m){ const l=await this.list(); const w=l.find(x=>x.id===id); if(w){ w.master=m; await this.save(l); } },
+  async perm(h,ask){ let p='denied'; try{ p=await h.queryPermission({mode:'read'}); }catch{} if(p!=='granted'&&ask){ try{ p=await h.requestPermission({mode:'read'}); }catch{} } return p==='granted'; },
+  async *walk(dir,path,devdir,depth=0){
+    if(depth>8) return;
+    for await (const [name,h] of dir.entries()){
+      if(name.startsWith('.')||/^(thumbs\.db|desktop\.ini|android)$/i.test(name)) continue;
+      if(h.kind==='file'){ yield {h,name,rel:path}; continue; }
+      if(name==='FileSaathi'||/^\.?thumbnails$|^\.trash|^cache$/i.test(name)) continue;
+      if(devdir){ try{ if(await devdir.isSameEntry(h)) continue; }catch{} }
+      yield* this.walk(h,path?path+'/'+name:name,devdir,depth+1);
+    }
+  },
+  async scan(ask){
+    const C=window.FS_CORE; if(!C||this.busy) return;
+    const l=await this.list(); if(!l.length){ this.bar(); return; }
+    this.busy=true; this.needPerm=false; this.bar('Looking for new files…');
+    const seen=(await KV.get('watchSeen'))||{}, devdir=await KV.get('devdir'); const add=[]; let saveT=null;
+    const markSeen=k=>{ seen[k]=1; clearTimeout(saveT); saveT=setTimeout(()=>KV.set('watchSeen',seen),800); };
+    const OK=/\.(jpe?g|png|webp|gif|pdf|docx?|xlsx?|txt|csv|json|md)$/i;
+    try{
+      for(const w of l){
+        if(!await this.perm(w.handle,ask)){ this.needPerm=true; continue; }
+        let n=0;
+        try{
+          for await (const x of this.walk(w.handle,w.name,devdir)){
+            if(!OK.test(x.name)) continue;
+            let f; try{ f=await x.h.getFile(); }catch{ continue; }
+            const key=w.id+'|'+x.rel+'/'+x.name+'|'+f.size+'|'+f.lastModified; n++;
+            if(seen[key]||this.pending.has(key)) continue;
+            this.pending.add(key);
+            add.push({file:f,rel:x.rel,master:w.master,quiet:true,localOnly:!w.backup,watchId:w.id,photoCheck:/^image\//.test(f.type)||/\.(jpe?g|png|webp|gif)$/i.test(x.name),ack:()=>{ markSeen(key); this.pending.delete(key); }});
+            if(add.length>=1500) break;
+          }
+        }catch(e){ if(e?.name==='NotFoundError'){ w.missing=true; } }
+        w.files=n; w.checked=Date.now();
+      }
+      await KV.set('watch',l);
+    } finally { this.busy=false; }
+    this.last=Date.now(); this.lastFound=add.length;
+    if(add.length){ C.toast(`Found ${add.length} new ${add.length===1?'file':'files'} on this tablet. Checking and filing them…`,5000); C.enqueue(add); }
+    else if(ask) C.toast(this.needPerm?'Tap "Allow" so FileSaathi can look in your folders':'No new files. Everything is already in FileSaathi.',4000);
+    this.bar(); if(C.panel()==='watch') this.render();
+  },
+  async bar(msg){
+    const el=document.getElementById('watchBar'); if(!el) return;
+    if(!this.supported()){ el.hidden=true; return; }
+    const l=await this.list();
+    if(!l.length){ el.hidden=true; return; }
+    el.hidden=false;
+    const ago=this.last?Math.max(0,Math.round((Date.now()-this.last)/60000)):null;
+    el.innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:none"><rect x="4" y="2" width="16" height="20" rx="2.5"/><path d="M10 18h4"/></svg>
+      <span style="flex:1 1 200px;min-width:0">${msg||(this.needPerm?`FileSaathi needs your permission to look in your tablet folders.`:`Looking after ${l.length} ${l.length===1?'folder':'folders'} on this tablet${ago!=null?` · checked ${ago?ago+' min ago':'just now'}`:''}${this.lastFound?` · ${this.lastFound} new`:''}`)}</span>
+      ${this.busy?'':`<button class="btn sm ${this.needPerm?'primary':''}" id="watchCheck">${this.needPerm?'Allow and check':'Check now'}</button>`}<button class="btn sm ghost" id="watchOpen">Folders</button>`;
+  },
+  async render(){
+    const C=window.FS_CORE; if(C.panel()!=='watch') return; const l=await this.list(); const ms=C.masters(); const esc=C.esc;
+    document.getElementById('drawer').innerHTML=C.head('Manage my tablet files')+`<div class="dbody">
+      <p style="margin:0">Choose the folders on this tablet where your documents are. FileSaathi checks them every time you open it and files every new document for you. <b>Your original files stay exactly where they are</b>; FileSaathi keeps its own named copy. Personal photos are left out.</p>
+      <p style="margin:0"><b>Nothing from these folders is saved online.</b> The documents stay on this tablet only: they are not sent to Google Drive, and they are read on the tablet itself, not by AI. You can switch on a Google Drive backup for a folder below if you ever want one.</p>
+      ${this.supported()?'':'<div class="confirm">This browser cannot look at folders on the device. On an Android tablet, open FileSaathi in Chrome.</div>'}
+      <div class="mlist">${l.length?l.map(w=>`<div class="mitem" style="align-items:center">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z"/></svg>
+          <span style="flex:1 1 140px;min-width:0"><b>${esc(w.name)}</b><br><span class="n">${w.missing?'Not found any more':w.checked?C.plural(w.files||0,'document')+' found':'Not checked yet'}</span></span>
+          <label style="font-size:.8rem;color:var(--muted);display:flex;flex-direction:column;gap:2px">Save into
+            <select data-wmaster="${esc(w.id)}" style="padding:5px 8px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface)">${ms.map(m=>`<option value="${esc(m.id)}"${m.id===w.master?' selected':''}>${esc(m.name)}</option>`).join('')}</select></label>
+          <label style="font-size:.82rem;display:flex;gap:6px;align-items:center"><input type="checkbox" data-wbackup="${esc(w.id)}"${w.backup?' checked':''} style="accent-color:var(--ink)"> Back up to Google Drive</label>
+          <button class="btn sm danger" data-wremove="${esc(w.id)}">Stop</button></div>`).join(''):'<p style="margin:0;color:var(--muted)">No folders yet.</p>'}</div>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary" id="watchAdd"${this.supported()?'':' disabled'}>+ Add a folder</button>
+        ${l.length?`<button class="btn" id="watchCheck"${this.busy?' disabled':''}>${this.busy?'Checking…':'Check for new files now'}</button>`:''}</div>
+      <div class="step"><span class="k">?</span><div class="c"><strong>Good folders to add on Android</strong>
+        <p>• <b>Documents</b> &nbsp;• <b>Download</b> → open it and choose a folder inside (Android does not allow the main Download folder)<br>
+        • <b>Pictures → Screenshots</b> (or DCIM → Screenshots)<br>
+        • WhatsApp: <b>Android → media → com.whatsapp → WhatsApp → Media → WhatsApp Documents</b> (and WhatsApp Images)</p>
+        <p>Android does not allow apps to read the whole tablet at once, so add each folder once. Files are checked when FileSaathi is open; it cannot run in the background when closed.</p></div></div>
+      <p style="margin:0;font-size:.82rem;color:var(--muted)">Stopping a folder only stops checking it. Files already in FileSaathi stay.</p>
+    </div>`;
+  }
+};
+document.addEventListener('change',e=>{ const m=e.target?.dataset?.wmaster; if(m) Watch.setMaster(m,e.target.value).then(()=>window.FS_CORE.toast('Saved'));
+  const bk=e.target?.dataset?.wbackup; if(bk) Watch.setBackup(bk,e.target.checked); });
+document.addEventListener('click',e=>{ const b=e.target.closest?.('[data-wremove]'); if(b) Watch.remove(b.dataset.wremove); });
+
 let installEvt=null, installCb=null;
 window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; installCb&&installCb(); });
 const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
 let canFiles=false; try{ canFiles=!!(navigator.canShare&&navigator.canShare({files:[new File(['x'],'x.txt',{type:'text/plain'})]})); }catch{}
+
+/* ---------- Feels like an installed app (the same approach as the MHMRWS portal) ---------- */
+// 1. Android back button / back gesture: close the open panel first; press twice to leave the app.
+(function backButton(){
+  let lastBack=0;
+  const trap=()=>{ try{ history.pushState({fsTrap:true},''); }catch{} };
+  window.addEventListener('load',trap);
+  window.addEventListener('popstate',()=>{
+    if(window.FS_CORE?.back?.()){ trap(); return; }
+    const now=Date.now(); if(now-lastBack<2000) return;
+    lastBack=now; trap(); window.FS_CORE?.toast?.('Press back again to close FileSaathi',2000);
+  });
+})();
+// 2. New version: update by itself at a safe moment (not while a panel is open or files are being added).
+(function autoUpdate(){
+  if(!('serviceWorker' in navigator)) return;
+  const had=!!navigator.serviceWorker.controller; let pending=false;
+  const busy=()=>!!window.FS_CORE?.busy?.() || (document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && !['button','checkbox','radio','file'].includes(document.activeElement.type));
+  const go=()=>{ if(!pending) return; if(document.visibilityState==='hidden'){ location.reload(); return; }
+    if(busy()) return; window.FS_CORE?.toast?.('Updating FileSaathi to the newest version…',0); setTimeout(()=>location.reload(),1200); pending=false; };
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(!had) return; pending=true; go(); });
+  ['visibilitychange','click','focusout'].forEach(ev=>document.addEventListener(ev,()=>setTimeout(go,300),true));
+  setInterval(go,20000);
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') navigator.serviceWorker.getRegistration().then(r=>r?.update()).catch(()=>{}); });
+})();
+// 3. Installed: thank-you message, hide the install prompts.
+window.addEventListener('appinstalled',()=>{ try{ localStorage.setItem('fs_installed','1'); }catch{}
+  document.getElementById('installBtn')?.setAttribute('hidden',''); document.getElementById('installBar')?.setAttribute('hidden','');
+  window.FS_CORE?.toast?.('FileSaathi is installed. Open it from your Home Screen.',5000); });
 
 let swState=!('serviceWorker' in navigator)?'unsupported':!location.protocol.startsWith('http')?'file':'pending', swErr='';
 if(swState==='pending') navigator.serviceWorker.register('./sw.js').then(reg=>{ swState='installing';
@@ -872,12 +1018,15 @@ window.FS_PLATFORM = {
   shareHelp: 'Your browser cannot attach files to other apps directly, so the file is saved to your Downloads. Attach it in WhatsApp or your email.',
   privacy: 'Your files live on this device and, once connected, in your own Google Drive. Nothing goes to GitHub or to us. Your AI key stays on this device. Without Drive sync, download a backup now and then, because clearing browser data removes the vault.',
   canShareFiles: canFiles,
+  watch: Watch,
   officeOK: true,
   ocr: blob=>OCR.read(blob),
   engine: ()=>getEngine()==='claude'&&getKey()?'claude':'offline',
-  pdfWorker: 'libs/pdf.worker.min.js',
+  pdfWorker: 'pdf.worker.min.js',
+  version: '1.4.0',
   missingHelp: 'These files are not on this device and could not be downloaded from Google Drive. Check your internet and that Drive is connected (top button), then try again.',
   fileBadge(f){
+    if(f.localOnly&&!f.trashedAt) return '<span class="pill fz" title="Kept only on this tablet. Not sent to Google Drive or to AI.">On this tablet only</span>';
     if(!Sync.on()||f.trashedAt) return '';
     if(f.remoteMissing) return '<span class="pill late" title="This file was removed from Google Drive outside FileSaathi and is not on this device">Missing in Drive</span>';
     return !f.driveId?'<span class="pill fz" title="Will be uploaded at the next sync">Not in Drive yet</span>':'';
@@ -897,7 +1046,7 @@ window.FS_PLATFORM = {
     try{ await openDB(); }catch{ return {error:'Local storage is blocked in this browser window (private mode?). Open FileSaathi in a normal window.'}; }
     try{ await navigator.storage?.persist?.(); }catch{}
     const key=getKey();
-    Sync.ui(); setTimeout(()=>Sync.now(),1500); setTimeout(()=>DevFolder.now(),2200);
+    Sync.ui(); setTimeout(()=>Sync.now(),1500); setTimeout(()=>DevFolder.now(),2200); setTimeout(()=>Watch.scan(false),3000); Watch.bar();
     return {col,assets,dl,sample:key?sample:null,imgOK:true,
       warn: location.protocol==='file:' ? 'Opened as a local file. Everything works, but installing the app and sharing from WhatsApp need FileSaathi to be opened from a web address (see README).' : null};
   },
@@ -1005,6 +1154,7 @@ window.FS_PLATFORM = {
       <button class="btn primary" id="saveKey">Save &amp; test</button>${k?'<button class="btn danger" id="clearKey">Remove key</button>':''}</div>`;
   },
   async onClick(id,{toast,renderSettings}){
+    if(id==='watchAdd'){ await Watch.add(); return; }
     if(id==='devChoose'){ try{ await DevFolder.choose(); toast('FileSaathi folder created. Copying your files…',5000); }catch(e){ if(e?.name!=='AbortError') toast(e?.name==='SecurityError'?'That place is not allowed. Choose a folder such as Documents.':'The folder could not be set up ('+(e?.message||'error')+')',7000); } renderSettings(); return; }
     if(id==='devAllow'||id==='devChip'){ await DevFolder.now(true); if(DevFolder.state==='gone'){ document.getElementById('settingsBtn').click(); } else if(DevFolder.state==='ok') toast('Folder access allowed'); renderSettings(); return; }
     if(id==='devNow'){ await DevFolder.now(true); renderSettings(); return; }
@@ -1125,6 +1275,7 @@ function hydrate(root=document){
     if(S.panel==='manage') renderManage();
   }, err=>banner('Your files could not be loaded ('+(err?.code||'error')+'). Please reload in a moment.'));
   refreshUsage();
+  if(P.watch && P.watch.supported()) $('#watchBtn').hidden=false;
   if(P.onInstallable) P.onInstallable(()=>{ $('#installBtn').hidden=false;
     let dismissed=false; try{ dismissed=Date.now()-(+localStorage.getItem('fs_install_x')||0)<7*864e5; }catch{}
     if(!dismissed && matchMedia('(max-width:1024px)').matches) $('#installBar').hidden=false; });
@@ -1364,9 +1515,108 @@ function renderGrid(){
   $('#empty').innerHTML=e;
 }
 function renderQueue(){
-  const q=$('#queue'); q.hidden=!S.queue.length;
-  q.innerHTML=S.queue.map((it,i)=>`<div class="qi ${it.state}">${it.state==='work'?'<span class="spin"></span>':''}<span class="nm">${esc(it.final||it.file.name)}</span><span class="st">${esc(it.msg)}</span>${it.state==='err'&&it.retry?`<button class="btn sm" data-retry="${i}">Retry</button>`:''}</div>`).join('')
-    +(S.queue.some(i=>i.state==='done'||i.state==='err')&&!S.busy?`<button class="btn sm ghost" id="clearQ" style="align-self:flex-start">Clear list</button>`:'');
+  const q=$('#queue'); q.hidden=!S.queue.length; if(!S.queue.length){ q.innerHTML=''; return; }
+  const N=S.queue.length, done=S.queue.filter(i=>i.state==='done').length, err=S.queue.filter(i=>i.state==='err').length, skip=S.queue.filter(i=>i.state==='skip').length, left=N-done-err-skip;
+  const row=(it,i)=>`<div class="qi ${it.state}">${it.state==='work'?'<span class="spin"></span>':''}<span class="nm">${esc(it.final||(it.rel?it.rel+'/':'')+it.file.name)}</span><span class="st">${esc(it.msg)}</span>${it.state==='err'&&it.retry?`<button class="btn sm" data-retry="${i}">Retry</button>`:''}</div>`;
+  let list=S.queue.map((it,i)=>({it,i}));
+  if(N>8 && !S.qAll){ const keep=new Set(); list.forEach(({it,i})=>{ if(it.state==='work'||it.state==='err') keep.add(i); });
+    list.filter(({it})=>it.state==='done'||it.state==='skip').slice(-5).forEach(({i})=>keep.add(i)); list=list.filter(({i})=>keep.has(i)); }
+  const head=N>3?`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:.88rem">
+      <b>${left?`Checking ${N} files`:`Done: ${plural(done,'file')} added`}</b><span style="color:var(--muted)">${done} added${skip?` · ${skip} left out`:''}${err?` · <span style="color:var(--danger)">${err} not added</span>`:''}${left?` · ${left} left`:''}</span>
+      ${left>1?`<button class="btn sm" id="qStop">Stop</button>`:''}
+      ${N>8?`<button class="linkbtn" id="qAll" style="margin-left:auto">${S.qAll?'Show less':'Show all '+N}</button>`:''}</div>
+    <div style="height:4px;border-radius:9px;background:var(--sunk);overflow:hidden"><i style="display:block;height:100%;width:${Math.round((done+err+skip)/N*100)}%;background:var(--ink)"></i></div>`:'';
+  q.innerHTML=head+list.map(({it,i})=>row(it,i)).join('')
+    +(S.queue.some(i=>i.state==='done'||i.state==='err'||i.state==='skip')&&!S.busy?`<button class="btn sm ghost" id="clearQ" style="align-self:flex-start">Clear list</button>`:'');
+}
+/* ---------- is this photo a document (bill, ID, receipt, screenshot) or a personal photo? ---------- */
+const DOC_HINT=/screenshot|screen[_ -]?shot|\bscan|camscanner|adobe ?scan|bill|invoice|receipt|aadh?aa?r|\bpan[ _-]?card|passport|licen[cs]e|policy|report|certificate|statement|ticket|marksheet|prescription|kyc|challan|rasid/i;
+const DOC_FOLDER=/(^|\/)(screenshots?|camscanner|scans?|scanned|adobe scan|whatsapp documents)(\/|$)/i;
+const PHOTO_HINT=/(^|\/)(camera|selfies?|portraits?|wallpapers?|facebook|instagram|snapchat|pictures\/.*family|travel|trip|wedding|party)(\/|$)/i;
+async function photoStats(file){
+  const bmp=await createImageBitmap(file); const W=200, k=W/Math.max(bmp.width,bmp.height);
+  const w=Math.max(8,Math.round(bmp.width*k)), h=Math.max(8,Math.round(bmp.height*k));
+  const c=document.createElement('canvas'); c.width=w; c.height=h; const g=c.getContext('2d',{willReadFrequently:true}); g.drawImage(bmp,0,0,w,h); if(bmp.close) bmp.close();
+  const d=g.getImageData(0,0,w,h).data, n=w*h, L=new Float32Array(n); let paper=0, colorful=0, mid=0, dark=0, cPaper=0, cN=0;
+  for(let i=0;i<n;i++){ const r=d[i*4],gg=d[i*4+1],b=d[i*4+2], mx=Math.max(r,gg,b), mn=Math.min(r,gg,b), l=(r*299+gg*587+b*114)/1000, sat=mx?(mx-mn)/mx:0;
+    L[i]=l; if(l>185&&sat<0.18) paper++; if(sat>0.35&&mx>60) colorful++; if(l>60&&l<185) mid++; if(l<80) dark++;
+    const x=i%w, y=(i/w)|0; if(x>w*0.25&&x<w*0.75&&y>h*0.25&&y<h*0.75){ cN++; if(l>170&&sat<0.22) cPaper++; } }
+  let edges=0; for(let y=0;y<h-1;y++) for(let x=0;x<w-1;x++){ const i=y*w+x; if(Math.abs(L[i]-L[i+1])>60||Math.abs(L[i]-L[i+w])>60) edges++; }
+  c.width=c.height=0;
+  return {paper:paper/n,colorful:colorful/n,mid:mid/n,edges:edges/n,dark:dark/n,center:cN?cPaper/cN:0};
+}
+function docScore(st){ return 0.55*st.paper + 0.35*Math.min(1,st.edges*6) - 0.3*st.colorful - 0.25*Math.max(0,st.mid-0.55); }
+async function looksLikeDocument(file,rel){
+  const where=(rel?rel+'/':'')+file.name;
+  if(DOC_HINT.test(file.name) || DOC_FOLDER.test(rel||'')) return true;
+  let st; try{ st=await photoStats(file); }catch{ return true; }
+  let score=docScore(st); if(PHOTO_HINT.test(where)) score-=0.12;
+  if(score>=0.5) return true;                          // clearly paper or a screen
+  if(score<0 && st.center<0.55) return false;          // clearly a photo, nothing paper-like in the middle
+  // In between (a bill on a dark table, a grey photo, a drawing): read the text to decide.
+  if(P.ocr){ try{ const t=await withTimeout(P.ocr(await toJpeg(file,1400)),60000); const words=(t.match(/[A-Za-zऀ-ॿ]{3,}/g)||[]).length; return words>=8; }catch{} }
+  return score>=0.25;
+}
+window.FS_TEST={photoStats,docScore,looksLikeDocument};
+
+/* ---------- folders: pick, drag in, or read from the device ---------- */
+const SKIP_NAME=/^(\.|~\$|thumbs\.db$|desktop\.ini$|\.ds_store$)/i;
+async function* walkHandle(dir,path=''){
+  for await (const [name,h] of dir.entries()){
+    if(SKIP_NAME.test(name)) continue;
+    if(h.kind==='file'){ try{ yield {file:await h.getFile(),rel:path}; }catch{} }
+    else yield* walkHandle(h,path?path+'/'+name:name);
+  }
+}
+function readAllEntries(reader){ return new Promise(res=>{ const out=[]; const next=()=>reader.readEntries(b=>{ if(!b.length) return res(out); out.push(...b); next(); },()=>res(out)); next(); }); }
+async function walkEntry(entry,path,out){
+  if(SKIP_NAME.test(entry.name)) return;
+  if(entry.isFile){ try{ out.push({file:await new Promise((r,j)=>entry.file(r,j)),rel:path}); }catch{} return; }
+  if(entry.isDirectory){ for(const e of await readAllEntries(entry.createReader())) await walkEntry(e,path?path+'/'+entry.name:entry.name,out); }
+}
+function supportedFile(f){ return !!typeOf(f); }
+function folderPlan(items,folderName){
+  const ok=items.filter(x=>supportedFile(x.file)), skipped=items.length-ok.length;
+  if(!ok.length){ toast(items.length?`None of the ${items.length} files in this folder can be added (only photos, PDF, Word, Excel and text files).`:'This folder is empty',6000); return; }
+  S.folderAdd={items:ok,skipped,name:folderName||'',size:ok.reduce((a,x)=>a+x.file.size,0)};
+  showPanel('folder'); renderFolderAdd();
+}
+function renderFolderAdd(){
+  const fa=S.folderAdd; if(!fa) return;
+  const subs=[...new Set(fa.items.map(x=>x.rel.split('/').slice(1).join('/')).filter(Boolean))];
+  const existing=masters().find(m=>m.name.toLowerCase()===fa.name.toLowerCase());
+  $('#drawer').innerHTML=head('Add a folder')+`<div class="dbody">
+    <p style="margin:0"><b>${plural(fa.items.length,'file')}</b>${fa.name?` from "<b>${esc(fa.name)}</b>"`:''} · ${fmtSize(fa.size)}${subs.length?` · ${plural(subs.length,'sub-folder')}`:''}</p>
+    ${fa.skipped?`<p style="margin:0;color:var(--muted);font-size:.88rem">${plural(fa.skipped,'other file')} will be left out (only photos, PDF, Word, Excel and text files can be added).</p>`:''}
+    <div class="flist">${fa.items.slice(0,30).map(x=>`<span>${esc((x.rel?x.rel+'/':'')+x.file.name)}</span>`).join('')}${fa.items.length>30?`<span>…and ${fa.items.length-30} more</span>`:''}</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <b style="font-size:.9rem">Save into</b>
+      ${fa.name?`<label style="display:flex;gap:10px;align-items:center"><input type="radio" name="faWhere" value="new" checked style="accent-color:var(--ink)"><span>${existing?`The master folder "<b>${esc(existing.name)}</b>"`:`A new master folder named "<b>${esc(fa.name)}</b>"`}</span></label>`:''}
+      <label style="display:flex;gap:10px;align-items:center"><input type="radio" name="faWhere" value="pick"${fa.name?'':' checked'} style="accent-color:var(--ink)"><span>This master folder:</span>
+        <select id="faMaster" style="padding:6px 8px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface)">${masters().map(m=>`<option value="${esc(m.id)}"${m.id===S.upMaster?' selected':''}>${esc(m.name)}</option>`).join('')}</select></label>
+      <p style="margin:0;color:var(--muted);font-size:.86rem">Each file is still read, renamed and sorted into the right sub-folder. The names of your folders (for example "Insurance" or "2024") are used as hints.</p>
+    </div></div>
+  <div class="dfoot"><button class="btn primary" id="faGo">Add ${plural(fa.items.length,'file')}</button><button class="btn sp" id="pClose2">Cancel</button></div>`;
+}
+async function folderGo(){
+  const fa=S.folderAdd; if(!fa) return;
+  const where=document.querySelector('input[name="faWhere"]:checked')?.value||'pick';
+  let mid=$('#faMaster')?.value||S.upMaster||'general';
+  if(where==='new' && fa.name){ const ex=masters().find(m=>m.name.toLowerCase()===fa.name.toLowerCase()); mid=ex?ex.id:await addMaster(fa.name); if(!mid) return; }
+  S.folderAdd=null; closePanel();
+  const prev=S.upMaster; S.upMaster=mid; enqueue(fa.items.map(x=>({file:x.file,rel:x.rel}))); S.upMaster=prev;
+  $('#tray').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function pickFolder(){
+  const inFrame=(()=>{ try{ return window.self!==window.top; }catch{ return true; } })();
+  if(typeof window.showDirectoryPicker==='function' && !inFrame){
+    let dir; try{ dir=await window.showDirectoryPicker({id:'filesaathi-add',mode:'read'}); }catch(e){ if(e?.name!=='AbortError') toast('That folder could not be opened'); return; }
+    toast('Reading the folder…',0); const items=[]; for await (const x of walkHandle(dir,dir.name)){ items.push(x); if(items.length>=2000) break; }
+    $('#toast').hidden=true; folderPlan(items,dir.name); return;
+  }
+  const inp=$('#pickFolder');
+  if(!('webkitdirectory' in inp)){ toast('This browser cannot pick a whole folder. Choose the files instead (you can select many at once).',7000); $('#pickFiles').click(); return; }
+  inp.click();
 }
 
 /* ---------- panels ---------- */
@@ -1415,6 +1665,7 @@ function renderFile(){
       <dt>Size</dt><dd>${fmtSize(f.size||0)}${f.pages?' · '+plural(f.pages,'page'):''}</dd>
       ${f.pages&&f.textPages?`<dt>Searchable</dt><dd>${f.textPages>=f.pages?'All pages':`First ${f.textPages} of ${f.pages} pages`}${f.text&&f.text.length>=8000?' (first 8,000 characters)':''}</dd>`:''}
       <dt>Added</dt><dd>${esc(fmtDate((f.uploadedAt||'').slice(0,10)))}</dd>
+      ${f.localOnly?`<dt>Kept</dt><dd>Only on this tablet (not saved online)</dd>`:''}
       <dt>Read by</dt><dd>${f.reader==='claude'?'Claude AI':f.reader==='offline'?'This device'+(f.ocr?' (with text scan)':''):'—'}</dd>
       <dt>Date source</dt><dd>${{ai:'Read from the document',text:'Found in the text',file:'File modified date (estimate)',manual:'Entered by you'}[f.dateSource]||'—'}</dd>
     </dl>
@@ -1547,6 +1798,7 @@ function renderSettings(){
       <div class="row"><button class="btn gold" id="backupBtn"${S.dl&&S.files.length?'':' disabled'}>Download backup</button><button class="btn" id="restoreBtn"${S.assets?'':' disabled'}>Restore from backup</button></div></div></div>
     ${P.installHelp?`<div class="step"><span class="k">↓</span><div class="c"><strong>Install on this device</strong>${P.installHelp()}</div></div>`:''}
     <p style="margin:0;font-size:.82rem;color:var(--muted)">${esc(P.privacy)}</p>
+    ${P.version?`<p style="margin:0;font-size:.8rem;color:var(--muted)">FileSaathi version ${esc(P.version)}</p>`:''}
   </div>`;
 }
 
@@ -1813,7 +2065,7 @@ function enqueue(files){
   const arr=[...files]; const need=arr.reduce((a,x)=>a+((x.file||x).size||0),0);
   const free=S.usage&&S.usage.maxBytes?S.usage.maxBytes-S.usage.bytes:null;
   if(free!==null && free<need*1.3+5*1048576) banner(`Storage is almost full: ${fmtSize(Math.max(0,free))} left. Some files may not save. Delete files from the recycle bin, or download a backup and remove old files.`);
-  arr.forEach(x=>{ const file=x.file||x; S.queue.push({file,ack:x.ack||null,master,state:'wait',msg:'Waiting'}); });
+  arr.forEach(x=>{ const file=x.file||x; S.queue.push({file,ack:x.ack||null,rel:x.rel||'',master:x.master||master,quiet:!!x.quiet,photoCheck:!!x.photoCheck,localOnly:!!x.localOnly,watchId:x.watchId||null,state:'wait',msg:'Waiting'}); });
   renderQueue(); pump();
 }
 async function pump(){
@@ -1832,8 +2084,10 @@ async function processOne(it){
   if(file.size>20*1048576) throw {msg:'Files must be 20 MB or smaller'};
   const buf=await file.arrayBuffer(); const hash=await sha(buf.slice(0));
   const dup=hash&&S.files.find(f=>f.hash===hash);
-  if(dup){ it.state='err'; it.msg=(dup.trashedAt?'Already in the recycle bin: ':'Already saved as ')+dup.name; return; }
-  if(hash&&S.pendingHashes.has(hash)){ it.state='err'; it.msg='Same file as one added a moment ago'; return; }
+  if(dup){ it.state=it.quiet?'skip':'err'; it.msg=it.quiet?'Already in FileSaathi':(dup.trashedAt?'Already in the recycle bin: ':'Already saved as ')+dup.name; return; }
+  if(hash&&S.pendingHashes.has(hash)){ it.state=it.quiet?'skip':'err'; it.msg=it.quiet?'Same as another file here':'Same file as one added a moment ago'; return; }
+  if(it.photoCheck && type.startsWith('image/')){ it.msg='Checking the photo…'; renderQueue();
+    const v=await looksLikeDocument(file,it.rel); if(!v){ it.state='skip'; it.msg='Personal photo, left out'; return; } }
   if(hash) S.pendingHashes.add(hash);
   try{ await saveNew(it,file,type,buf,hash); }catch(e){ if(hash) S.pendingHashes.delete(hash); throw e; }
 }
@@ -1852,8 +2106,10 @@ async function saveNew(it,file,type,buf,hash){
         const o=await withTimeout(P.ocr(src),120000); if(o&&o.trim().length>=8){ text=(text+'\n'+o).trim(); ocr=true; } } }catch{}
     it.msg='Reading…'; renderQueue();
   }
-  let meta=useClaude()?await analyze({file,text:text.trim(),image,cats:allFolders(),master:masterOf(it.master).name}):null; const aiDone=!!meta;
+  const hint=it.rel?`Saved by the user in the folder: ${it.rel}\n`:'';
+  let meta=(!it.localOnly&&useClaude())?await analyze({file,text:(hint+text).trim(),image,cats:allFolders(),master:masterOf(it.master).name}):null; const aiDone=!!meta;
   const off=offlineRead(file,type,text);
+  if(it.rel && !off.summary){ const byPath=offlineRead(new File([],it.rel.replace(/\//g,' ')+' '+file.name),type,''); if(byPath.summary||byPath.category!=='others'){ off.category=byPath.category; } }
   if(meta){ meta.dateSource=meta.date?'ai':null; if(!meta.date){ meta.date=off.date; meta.dateSource=off.dateSource; }
     meta.expiry=meta.expiry||off.expiry; meta.due=meta.due||off.due; meta.amount=meta.amount||off.amount; }
   else meta=off;
@@ -1863,10 +2119,10 @@ async function saveNew(it,file,type,buf,hash){
   let thumbId=null; if(thumb){ try{ thumbId=(await S.assets.upload(thumb,{type:'image/jpeg'})).id; }catch{} }
   const folder=meta.category, name=reserveName(uniqueName(buildName(meta,ext),folder),folder);
   const id='f'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-  try{ await S.col.doc(id).set({kind:'file',asset:up.id,thumb:thumbId,name,original:file.name,type,ext,size:file.size,pages,master:it.master,
+  try{ await S.col.doc(id).set({...(it.localOnly?{localOnly:true}:{}),...(it.watchId?{watchId:it.watchId}:{}),kind:'file',asset:up.id,thumb:thumbId,name,original:file.name,type,ext,size:file.size,pages,master:it.master,
     folder,title:meta.title||'',issuer:meta.issuer||null,person:meta.person||null,date:meta.date||null,dateSource:meta.dateSource||null,
     expiry:meta.expiry||null,due:meta.due||null,amount:meta.amount||null,summary:meta.summary||'',tags:meta.tags||[],keywords:meta.keywords||[],
-    text:text.trim().replace(/\s+/g,' ').slice(0,8000),textPages:it.textPages||null,ocr,reader:aiDone?'claude':'offline',needsReview,notes:'',star:false,hash,aiDone,trashedAt:null,uploadedAt:new Date().toISOString()}); }
+    text:(hint+text).trim().replace(/\s+/g,' ').slice(0,8000),textPages:it.textPages||null,ocr,reader:aiDone?'claude':'offline',needsReview,notes:it.rel?'From folder: '+it.rel:'',star:false,hash,aiDone,trashedAt:null,uploadedAt:new Date().toISOString()}); }
   catch(e){ try{ await S.assets.delete(up.id); }catch{} if(thumbId) try{ await S.assets.delete(thumbId); }catch{} throw e; }
   const why=!useClaude()?'':{timeout:'AI took too long',rate_limited:'AI busy',bad_key:'AI key rejected',offline:'offline',bad_reply:'AI reply unclear'}[S.lastAIError]||(S.lastAIError?'AI unavailable':'');
   const how=aiDone?'Read by AI':why?`Read on this device (${why})`:'Read on this device'+(ocr?' with text scan':'');
@@ -2290,6 +2546,12 @@ document.addEventListener('click',async e=>{
   if(S.panel==='scan' && t.id!=='pClose' && scanClick(t.id,t)) return;
   if(t.id==='pClose' && S.panel==='scan'){ S.scan=null; closePanel(); return; }
   if(t.id==='scanBtn'){ $('#scanInput').click(); return; }
+  if(t.id==='folderBtn'){ pickFolder(); return; }
+  if(t.id==='watchBtn'||t.id==='watchOpen'){ if(P.watch){ showPanel('watch'); P.watch.render(); } return; }
+  if(t.id==='watchCheck'){ P.watch?.scan(true); return; }
+  if(t.id==='faGo'){ folderGo(); return; }
+  if(t.id==='qAll'){ S.qAll=!S.qAll; renderQueue(); return; }
+  if(t.id==='qStop'){ const n=S.queue.filter(i=>i.state==='wait').length; S.queue=S.queue.filter(i=>i.state!=='wait'); renderQueue(); toast(`Stopped. ${plural(n,'file')} not checked yet; they will be checked next time.`,5000); return; }
   if(t.id==='upMasterAdd'){ addFromTray(); return; }
   if(t.id==='addMasterChip'){ S.confirmM=S.confirmF=null; showPanel('manage'); renderManage(); setTimeout(()=>$('#newMasterName2')?.focus(),50); return; }
   if(t.id==='recentAll'){ S.sort='up_desc'; renderGrid(); $('#filesSec').scrollIntoView({behavior:'smooth',block:'start'}); return; }
@@ -2329,7 +2591,7 @@ document.addEventListener('click',async e=>{
   const f=S.files.find(x=>x.id===S.open);
   switch(t.id){
     case 'pickBtn': $('#pickFiles').click(); break;
-    case 'clearQ': S.queue=S.queue.filter(i=>i.state==='work'||i.state==='wait'); renderQueue(); break;
+    case 'clearQ': S.queue=S.queue.filter(i=>i.state==='work'||i.state==='wait'); S.qAll=false; renderQueue(); break;
     case 'zipAll': zipList(S.files,'All','full'); break;
     case 'shareAll': openShare(S.files,'All files','full'); break;
     case 'zipView': zipList(visible().list,viewShareLabel(),viewMode()); break;
@@ -2391,7 +2653,11 @@ window.FS_CORE={setSample(s,imgOK){ S.sample=s; S.imgOK=!!imgOK; render(); }, to
     const m=ms.find(x=>x.id===(f.master||'general'))||ms[0], c=fs.find(x=>x.id===f.folder)||{name:'Others'};
     return [cleanDir(m.name),cleanDir(c.name),f.date?f.date.slice(0,4):'Undated'];
   },
-  refreshSettings(){ if(S.panel==='settings') renderSettings(); }, refreshUsage, enqueue:x=>enqueue(x),
+  refreshSettings(){ if(S.panel==='settings') renderSettings(); }, refreshUsage, enqueue:x=>enqueue(x), masters:()=>masters(), addMaster:n=>addMaster(n),
+  panel:()=>S.panel, showPanel:k=>showPanel(k), head:t=>head(t), esc, plural, closePanel:()=>closePanel(),
+  back(){ if(S.panel){ if(S.panel==='scan'){ S.scan=null; closePanel(); } else requestClose(); return true; }
+    if(S.view!=='all'||S.q||S.master!=='all'){ S.view='all'; S.q=''; $('#q').value=''; S.master='all'; S.ai=null; render(); return true; } return false; },
+  busy(){ return !!S.panel || S.busy || S.queue.some(i=>i.state==='work'||i.state==='wait'); },
   showInstallHelp(){ const st=P.installSteps?P.installSteps():null; if(!st) return; showPanel('install');
     $('#drawer').innerHTML=head(st.title)+`<div class="dbody">${st.steps.map((t,i)=>`<div class="step"><span class="k">${i+1}</span><div class="c"><p style="color:var(--ink);font-size:.95rem">${esc(t)}</p></div></div>`).join('')}
       <p style="margin:0;color:var(--muted);font-size:.86rem">After installing, open FileSaathi from your Home Screen. Your files stay the same.</p></div>`; }};
@@ -2449,13 +2715,23 @@ $('#q').addEventListener('keydown',e=>{ if(e.key==='Enter' && S.sample && S.q &&
 $('#sort').addEventListener('change',e=>{ if(S.q) S.qSort=e.target.value; else S.sort=e.target.value==='relevance'?'date_desc':e.target.value; renderGrid(); });
 $('#useAI').addEventListener('change',e=>{ S.useAI=e.target.checked; try{ localStorage.setItem('fs_useAI',S.useAI?'1':'0'); }catch{} toast(S.useAI?'New files will be read by AI':'AI is off. New files are named from their file name and date.'); });
 $('#pickFiles').addEventListener('change',e=>{ enqueue(e.target.files); e.target.value=''; });
+$('#pickFolder').addEventListener('change',e=>{ const fs=[...e.target.files]; e.target.value=''; if(!fs.length) return;
+  const items=fs.filter(f=>!SKIP_NAME.test(f.name)).map(f=>({file:f,rel:(f.webkitRelativePath||'').split('/').slice(0,-1).join('/')}));
+  folderPlan(items,(fs[0].webkitRelativePath||'').split('/')[0]||''); });
 $('#scanInput').addEventListener('change',e=>{ const fs=[...e.target.files]; e.target.value=''; if(!fs.length) return; if(S.scan) scanAdd(fs); else scanStart(fs,{label:'Scan'}); });
 $('#photosInput').addEventListener('change',e=>{ const fs=[...e.target.files]; const add=e.target.dataset.add; e.target.value=''; delete e.target.dataset.add; if(!fs.length) return; if(add&&S.scan) scanAdd(fs); else scanStart(fs,{label:'Photos'}); });
 $('#restoreFile').addEventListener('change',e=>{ const f=e.target.files[0]; e.target.value=''; if(f){ closePanel(); restorePreview(f); } });
 const tray=$('#tray');
 ['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{ if(e.dataTransfer?.types?.includes('Files')){ e.preventDefault(); tray.classList.add('drag'); } }));
 ['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{ if(ev==='dragleave'&&e.relatedTarget) return; tray.classList.remove('drag'); }));
-document.addEventListener('drop',e=>{ if(e.dataTransfer?.files?.length){ e.preventDefault(); enqueue(e.dataTransfer.files); } });
+document.addEventListener('drop',async e=>{
+  const dt=e.dataTransfer; if(!dt) return;
+  const entries=[...(dt.items||[])].map(i=>i.webkitGetAsEntry?.()).filter(Boolean);
+  if(entries.some(en=>en.isDirectory)){ e.preventDefault();
+    const out=[]; for(const en of entries) await walkEntry(en,'',out);
+    const top=entries.filter(en=>en.isDirectory); folderPlan(out,top.length===1?top[0].name:''); return; }
+  if(dt.files?.length){ e.preventDefault(); enqueue(dt.files); }
+});
 document.addEventListener('paste',e=>{
   const items=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file'); if(!items.length) return;
   const files=items.map(i=>i.getAsFile()).filter(Boolean)

@@ -1,9 +1,10 @@
-const CACHE='filesaathi-v7';
-const OCR_FILES=['./libs/tesseract/tesseract.min.js','./libs/tesseract/worker.min.js','./libs/tesseract/core/tesseract-core-simd-lstm.wasm.js','./libs/tesseract/core/tesseract-core-lstm.wasm.js','./libs/tesseract/lang/eng.traineddata.gz','./libs/tesseract/lang/hin.traineddata.gz'];
-const SHELL=['./','./index.html','./config.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png',
-  './libs/jszip.min.js','./libs/pdf.min.js','./libs/pdf.worker.min.js','./libs/jspdf.umd.min.js'];
-// Cache each file on its own: one missing file (for example a folder that did not upload) must not stop the app installing.
-self.addEventListener('install',e=>{ e.waitUntil(caches.open(CACHE).then(c=>Promise.allSettled([...SHELL,...OCR_FILES].map(u=>c.add(u)))).then(()=>self.skipWaiting())); });
+const CACHE='filesaathi-v1.4.0';
+const OCR_FILES=['./tesseract.min.js','./tesseract-worker.min.js','./tesseract-core-simd-lstm.wasm.js','./tesseract-core-lstm.wasm.js','./eng.traineddata.gz','./hin.traineddata.gz'];
+const SHELL=['./','./index.html','./config.js','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-192.png','./icon-maskable-512.png','./apple-touch-icon.png','./favicon-32.png',
+  './jszip.min.js','./pdf.min.js','./pdf.worker.min.js','./jspdf.umd.min.js'];
+// Cache each file on its own: one missing file must not stop the app installing.
+// cache:'reload' skips the browser's own HTTP cache, so a new version never mixes old and new files.
+self.addEventListener('install',e=>{ e.waitUntil(caches.open(CACHE).then(c=>Promise.allSettled([...SHELL,...OCR_FILES].map(u=>c.add(new Request(u,{cache:'reload'}))))).then(()=>self.skipWaiting())); });
 self.addEventListener('activate',e=>{ e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith('filesaathi-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
 
 function openDB(){
@@ -40,3 +41,5 @@ self.addEventListener('fetch',e=>{
   }
   // Google sign-in and Drive requests always go straight to the network
 });
+
+self.addEventListener('message',e=>{ if(e.data==='version') e.source?.postMessage({version:CACHE}); });
